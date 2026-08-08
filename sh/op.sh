@@ -88,6 +88,15 @@ PY
 
 echo "Aigo AGS21 DTS patch done"
 
+echo "===== AGS21 DTS CHECK ====="
+grep -A30 -B5 "leds {" "$XR30_DTS" || true
+echo "===== LAN PORT CHECK ====="
+grep -A50 "ports {" "$XR30_DTS" || true
+echo "===== LAN3 CHECK ====="
+grep -n "lan3\|port@3" "$XR30_DTS" || true
+echo "===== MODEL CHECK ====="
+grep -n "model =" "$XR30_DTS" || true
+
 fi
 
 # kenrel Vermagic
