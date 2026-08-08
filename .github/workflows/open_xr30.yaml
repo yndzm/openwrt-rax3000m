@@ -16,7 +16,7 @@ on:
       CUSTOM_PLUGINS:
         description: 'Extra package names separated by spaces'
         required: false
-        default: 'luci-app-zerotier luci-app-socat luci-app-samba4 luci-theme-m3e luci-app-ttyd luci-app-diskman'
+        default: 'luci-theme-m3e luci-app-ttyd luci-app-diskman'
         type: string
 
 permissions:
