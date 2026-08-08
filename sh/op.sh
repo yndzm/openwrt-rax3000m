@@ -11,6 +11,85 @@ function git_sparse_clone() {
 
 set -x
 
+# ==============================
+# Aigo AGS21 hardware fix
+# XR30 eMMC firmware adaptation
+# ==============================
+
+echo "==== Fix Aigo AGS21 DTS ===="
+
+DTS_DIR="target/linux/mediatek/dts"
+
+# 查找 XR30 DTS
+XR30_DTS=$(grep -rl "cmcc.*xr30\|XR30" $DTS_DIR 2>/dev/null | head -n 1)
+
+if [ -z "$XR30_DTS" ]; then
+    echo "XR30 DTS not found"
+else
+    echo "Found DTS:"
+    echo "$XR30_DTS"
+
+
+    # 修改 model
+    sed -i 's/model = ".*XR30.*";/model = "Aigo AGS21";/g' "$XR30_DTS"
+
+
+    # 替换 LED GPIO
+    python3 - "$XR30_DTS" <<'PY'
+import sys,re
+
+f=sys.argv[1]
+
+s=open(f).read()
+
+# 替换整个 leds 节点
+s=re.sub(
+r'leds\s*\{.*?\n\};',
+'''leds {
+    compatible = "gpio-leds";
+
+    status_red_led: led-0 {
+        label = "red:status";
+        gpios = <&pio 6 GPIO_ACTIVE_LOW>;
+    };
+
+    status_blue_led: led-1 {
+        label = "blue:status";
+        gpios = <&pio 4 GPIO_ACTIVE_LOW>;
+    };
+
+    internet_led: led-2 {
+        label = "green:status";
+        gpios = <&pio 29 GPIO_ACTIVE_LOW>;
+    };
+
+    wifi_led: led-3 {
+        label = "white:status";
+        gpios = <&pio 30 GPIO_ACTIVE_LOW>;
+    };
+};''',
+s,
+flags=re.S
+)
+
+
+# 删除 lan3
+s=re.sub(
+r'\\s*port@3\\s*\\{.*?\\n\\s*\\};',
+'',
+s,
+flags=re.S
+)
+
+open(f,"w").write(s)
+
+PY
+
+
+echo "Aigo AGS21 DTS patch done"
+
+fi
+
 # kenrel Vermagic
 sed -ie 's/^\(.\).*vermagic$/\1cp $(TOPDIR)\/.vermagic $(LINUX_DIR)\/.vermagic/' include/kernel-defaults.mk
 grep HASH target/linux/generic/kernel-6.12 | awk -F'HASH-' '{print $2}' | awk '{print $1}' | md5sum | awk '{print $1}' > .vermagic
