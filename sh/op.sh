@@ -181,7 +181,7 @@ eth=r'''
 
 
 dts=re.sub(
-r'&eth\s*\{.*?\n\};',
+r'&eth\s*\{.*?\n\}\s*;'
 eth,
 dts,
 flags=re.S
