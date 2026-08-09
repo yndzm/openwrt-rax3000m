@@ -16,54 +16,52 @@ echo "==== Convert CMCC XR30 eMMC to Aigo AGS21 ===="
 
 DTS_DIR="target/linux/mediatek/dts"
 
-EMMC_DTS="${DTS_DIR}/mt7981b-cmcc-xr30-emmc.dts"
-DTSI="${DTS_DIR}/mt7981b-cmcc-xr30.dtsi"
+EMMC_DTS="$DTS_DIR/mt7981b-cmcc-xr30-emmc.dts"
+XR30_DTSI="$DTS_DIR/mt7981b-cmcc-xr30.dtsi"
 
 
 if [ ! -f "$EMMC_DTS" ]; then
-	echo "ERROR: $EMMC_DTS not found"
+	echo "ERROR: eMMC DTS not found"
 	exit 1
 fi
 
-
-if [ ! -f "$DTSI" ]; then
-	echo "ERROR: $DTSI not found"
+if [ ! -f "$XR30_DTSI" ]; then
+	echo "ERROR: XR30 dtsi not found"
 	exit 1
 fi
 
 
 echo "Found:"
 echo "$EMMC_DTS"
-echo "$DTSI"
+echo "$XR30_DTSI"
 
 
-
-#################################################
-# 修改 eMMC DTS
-#################################################
+#################################
+# 修改 eMMC dts
+#################################
 
 echo "==== Patch eMMC DTS ===="
 
 
 sed -i \
-'s/model = "CMCC XR30 (eMMC version)";/model = "Aigo AGS21";/' \
+'s/model = ".*";/model = "Aigo AGS21";/' \
 "$EMMC_DTS"
 
 
 sed -i \
-'s/compatible = "cmcc,xr30-emmc", "mediatek,mt7981";/compatible = "aigo,ags21", "mediatek,mt7981";/' \
+'s#compatible = ".*";#compatible = "aigo,ags21", "mediatek,mt7981";#' \
 "$EMMC_DTS"
 
 
 
-#################################################
+#################################
 # 修改 XR30 dtsi
-#################################################
+#################################
 
 echo "==== Patch XR30 dtsi ===="
 
 
-python3 - "$DTSI" <<'EOF'
+python3 - "$XR30_DTSI" <<'EOF'
 
 import sys
 import re
@@ -71,35 +69,38 @@ import re
 
 file=sys.argv[1]
 
-data=open(file).read()
+
+with open(file) as f:
+    d=f.read()
 
 
 
+#################################
 # aliases
+#################################
 
-data=re.sub(
+d=re.sub(
 r'aliases\s*{.*?};',
-'''
-aliases {
+'''aliases {
 	led-boot = &status_red_led;
 	led-failsafe = &status_red_led;
 	led-running = &status_blue_led;
 	led-upgrade = &status_blue_led;
 	serial0 = &uart0;
-};
-''',
-data,
+};''',
+d,
 flags=re.S
 )
 
 
 
+#################################
 # LED
+#################################
 
-data=re.sub(
-r'leds\s*{.*?};',
-'''
-leds {
+d=re.sub(
+r'leds\s*{.*?};\n};',
+'''leds {
 	compatible = "gpio-leds";
 
 	status_red_led: red {
@@ -121,62 +122,53 @@ leds {
 		label = "white:status";
 		gpios = <&pio 30 GPIO_ACTIVE_LOW>;
 	};
-};
-''',
-data,
+};''',
+d,
 flags=re.S
 )
 
 
 
+#################################
 # 删除 LAN3
+#################################
 
-data=re.sub(
-r'\s*port@0\s*{.*?\n\s*};',
+d=re.sub(
+r'\s*port@0\s*{.*?};',
 '',
-data,
+d,
 flags=re.S
 )
 
 
 
-# 修正 LAN 名称
+#################################
+# LAN编号修正
+#################################
 
-old1='''
-port@1 {
+d=d.replace(
+'''port@1 {
 		reg = <1>;
-		label = "lan2";
-};'''
-
-new1='''
-port@1 {
+		label = "lan2";''',
+'''port@1 {
 		reg = <1>;
-		label = "lan1";
-};'''
+		label = "lan1";'''
+)
 
 
-data=data.replace(old1,new1)
-
-
-
-old2='''
-port@2 {
+d=d.replace(
+'''port@2 {
 		reg = <2>;
-		label = "lan1";
-};'''
-
-new2='''
-port@2 {
+		label = "lan1";''',
+'''port@2 {
 		reg = <2>;
-		label = "lan2";
-};'''
-
-
-data=data.replace(old2,new2)
+		label = "lan2";'''
+)
 
 
 
-open(file,"w").write(data)
+with open(file,"w") as f:
+    f.write(d)
 
 
 print("XR30 dtsi patched")
@@ -185,36 +177,33 @@ EOF
 
 
 
-#################################################
+#################################
 # 检查
-#################################################
+#################################
 
 echo "===== MODEL ====="
-
 grep -n "model =" "$EMMC_DTS"
 
 
 echo "===== COMPATIBLE ====="
-
-grep -n "compatible =" "$EMMC_DTS"
-
-
-echo "===== LED ====="
-
-grep -A30 "leds {" "$DTSI"
+grep -n compatible "$EMMC_DTS"
 
 
+echo "===== LED CHECK ====="
+grep -nE "GPIO|gpio|led" "$XR30_DTSI"
 
-echo "===== PORT ====="
 
-grep -A40 "ports {" "$DTSI"
-
+echo "===== PORT CHECK ====="
+grep -A40 "ports {" "$XR30_DTSI"
 
 
 echo "===== LAN3 CHECK ====="
 
-grep -n "lan3" "$DTSI" || echo "LAN3 removed"
-
+if grep -q 'lan3' "$XR30_DTSI"; then
+	echo "ERROR: LAN3 still exists"
+else
+	echo "LAN3 removed"
+fi
 
 
 echo "==== AGS21 DTS DONE ===="
