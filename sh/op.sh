@@ -9,105 +9,132 @@ function git_sparse_clone() {
   cd .. && rm -rf $repodir
 }
 
-set -x
+set -e
 
 echo "==== Fix Aigo AGS21 on RAX3000M DTS ===="
 
 DTS_DIR="target/linux/mediatek/dts"
 
-# 查找 RAX3000M DTS
-RAX_DTS=$(find "$DTS_DIR" -name "*rax3000m*.dts" | head -n 1)
+RAX_DTS=$(find "$DTS_DIR" -name "mt7981b-cmcc-rax3000m-emmc.dts" | head -n 1)
 
 if [ -z "$RAX_DTS" ]; then
-    echo "ERROR: RAX3000M DTS not found"
+    echo "ERROR: RAX3000M DTS not found!"
     exit 1
 fi
 
-echo "Found RAX DTS:"
+echo "Found DTS:"
 echo "$RAX_DTS"
 
 
-#################################
-# 修改 model
-#################################
+echo "==== Change model ===="
 
 sed -i 's/model = ".*";/model = "Aigo AGS21";/' "$RAX_DTS"
 
 
-#################################
-# 修改 LED GPIO
-#################################
+echo "==== Patch LED ===="
 
-python3 - "$RAX_DTS" <<'PY'
+python3 - "$RAX_DTS" <<'EOF'
+import sys
+import re
 
-import sys,re
+file=sys.argv[1]
 
-f=sys.argv[1]
+with open(file,'r') as f:
+    dts=f.read()
 
-s=open(f).read()
 
+# =========================
+# aliases 修改
+# =========================
 
-# 修改已有 gpio-led 节点 GPIO
-s=re.sub(
-r'(label = "red:.*?";\s*gpios = <&pio )\d+',
-r'\g<1>6',
-s,
-flags=re.S
+dts=dts.replace(
+    "led-boot = &red_led;",
+    "led-boot = &status_red_led;"
 )
 
-s=re.sub(
-r'(label = "blue:.*?";\s*gpios = <&pio )\d+',
-r'\g<1>4',
-s,
-flags=re.S
+dts=dts.replace(
+    "led-failsafe = &red_led;",
+    "led-failsafe = &status_red_led;"
 )
 
-s=re.sub(
-r'(label = "green:.*?";\s*gpios = <&pio )\d+',
-r'\g<1>29',
-s,
-flags=re.S
+dts=dts.replace(
+    "led-running = &green_led;",
+    "led-running = &status_blue_led;"
 )
 
-s=re.sub(
-r'(label = "white:.*?";\s*gpios = <&pio )\d+',
-r'\g<1>30',
-s,
-flags=re.S
+dts=dts.replace(
+    "led-upgrade = &green_led;",
+    "led-upgrade = &status_blue_led;"
 )
 
 
-# 删除 lan3
-s=re.sub(
-r'\s*port@3\s*\{.*?\n\s*\};',
-'\n',
-s,
-flags=re.S
+# =========================
+# 替换 gpio-leds 节点
+# =========================
+
+pattern=r'gpio-leds\s*\{.*?\n\t\};'
+
+new_led=r'''gpio-leds {
+		compatible = "gpio-leds";
+
+		status_red_led: led-0 {
+			label = "red:status";
+			gpios = <&pio 6 GPIO_ACTIVE_LOW>;
+		};
+
+		status_blue_led: led-1 {
+			label = "blue:status";
+			gpios = <&pio 4 GPIO_ACTIVE_LOW>;
+		};
+
+		internet_led: led-2 {
+			label = "green:status";
+			gpios = <&pio 29 GPIO_ACTIVE_LOW>;
+		};
+
+		wifi_led: led-3 {
+			label = "white:status";
+			gpios = <&pio 30 GPIO_ACTIVE_LOW>;
+		};
+	};'''
+
+
+dts,new_count=re.subn(
+    pattern,
+    new_led,
+    dts,
+    flags=re.S
 )
 
 
-open(f,"w").write(s)
+if new_count==0:
+    print("WARNING: gpio-leds not replaced")
+else:
+    print("LED replaced successfully")
 
-PY
+
+with open(file,'w') as f:
+    f.write(dts)
+
+EOF
 
 
 echo "==== AGS21 DTS patch finished ===="
 
 
-#################################
-# 输出检查
-#################################
-
 echo "===== MODEL ====="
-grep -n "model =" "$RAX_DTS" || true
+grep -n "model =" "$RAX_DTS"
 
 
 echo "===== LED ====="
-grep -n "led\|gpio" "$RAX_DTS" || true
+grep -nE "led|gpio" "$RAX_DTS"
 
 
 echo "===== PORT ====="
-grep -n "port@\|lan" "$RAX_DTS" || true
+grep -nE "port@|lan" "$RAX_DTS"
+
+
+echo "==== DONE ===="
 
 # kenrel Vermagic
 sed -ie 's/^\(.\).*vermagic$/\1cp $(TOPDIR)\/.vermagic $(LINUX_DIR)\/.vermagic/' include/kernel-defaults.mk
