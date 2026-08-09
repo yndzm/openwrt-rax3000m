@@ -11,63 +11,67 @@ function git_sparse_clone() {
 
 set -x
 
-# ==============================
-# Aigo AGS21 hardware fix
-# XR30 eMMC firmware adaptation
-# ==============================
-
-echo "==== Fix Aigo AGS21 DTS ===="
+echo "==== Fix Aigo AGS21 on RAX3000M DTS ===="
 
 DTS_DIR="target/linux/mediatek/dts"
 
-# 查找 XR30 DTS
-XR30_DTS=$(grep -rl "cmcc.*xr30\|XR30" $DTS_DIR 2>/dev/null | head -n 1)
+# 查找 RAX3000M DTS
+RAX_DTS=$(find "$DTS_DIR" -name "*rax3000m*.dts" | head -n 1)
 
-if [ -z "$XR30_DTS" ]; then
-    echo "XR30 DTS not found"
-else
-    echo "Found DTS:"
-    echo "$XR30_DTS"
+if [ -z "$RAX_DTS" ]; then
+    echo "ERROR: RAX3000M DTS not found"
+    exit 1
+fi
 
-
-    # 修改 model
-    sed -i 's/model = ".*XR30.*";/model = "Aigo AGS21";/g' "$XR30_DTS"
+echo "Found RAX DTS:"
+echo "$RAX_DTS"
 
 
-    # 替换 LED GPIO
-    python3 - "$XR30_DTS" <<'PY'
+#################################
+# 修改 model
+#################################
+
+sed -i 's/model = ".*";/model = "Aigo AGS21";/' "$RAX_DTS"
+
+
+#################################
+# 修改 LED GPIO
+#################################
+
+python3 - "$RAX_DTS" <<'PY'
+
 import sys,re
 
 f=sys.argv[1]
 
 s=open(f).read()
 
-# 替换整个 leds 节点
+
+# 修改已有 gpio-led 节点 GPIO
 s=re.sub(
-r'leds\s*\{.*?\n\};',
-'''leds {
-    compatible = "gpio-leds";
+r'(label = "red:.*?";\s*gpios = <&pio )\d+',
+r'\g<1>6',
+s,
+flags=re.S
+)
 
-    status_red_led: led-0 {
-        label = "red:status";
-        gpios = <&pio 6 GPIO_ACTIVE_LOW>;
-    };
+s=re.sub(
+r'(label = "blue:.*?";\s*gpios = <&pio )\d+',
+r'\g<1>4',
+s,
+flags=re.S
+)
 
-    status_blue_led: led-1 {
-        label = "blue:status";
-        gpios = <&pio 4 GPIO_ACTIVE_LOW>;
-    };
+s=re.sub(
+r'(label = "green:.*?";\s*gpios = <&pio )\d+',
+r'\g<1>29',
+s,
+flags=re.S
+)
 
-    internet_led: led-2 {
-        label = "green:status";
-        gpios = <&pio 29 GPIO_ACTIVE_LOW>;
-    };
-
-    wifi_led: led-3 {
-        label = "white:status";
-        gpios = <&pio 30 GPIO_ACTIVE_LOW>;
-    };
-};''',
+s=re.sub(
+r'(label = "white:.*?";\s*gpios = <&pio )\d+',
+r'\g<1>30',
 s,
 flags=re.S
 )
@@ -75,29 +79,35 @@ flags=re.S
 
 # 删除 lan3
 s=re.sub(
-r'\\s*port@3\\s*\\{.*?\\n\\s*\\};',
-'',
+r'\s*port@3\s*\{.*?\n\s*\};',
+'\n',
 s,
 flags=re.S
 )
+
 
 open(f,"w").write(s)
 
 PY
 
 
-echo "Aigo AGS21 DTS patch done"
+echo "==== AGS21 DTS patch finished ===="
 
-echo "===== AGS21 DTS CHECK ====="
-grep -A30 -B5 "leds {" "$XR30_DTS" || true
-echo "===== LAN PORT CHECK ====="
-grep -A50 "ports {" "$XR30_DTS" || true
-echo "===== LAN3 CHECK ====="
-grep -n "lan3\|port@3" "$XR30_DTS" || true
-echo "===== MODEL CHECK ====="
-grep -n "model =" "$XR30_DTS" || true
 
-fi
+#################################
+# 输出检查
+#################################
+
+echo "===== MODEL ====="
+grep -n "model =" "$RAX_DTS" || true
+
+
+echo "===== LED ====="
+grep -n "led\|gpio" "$RAX_DTS" || true
+
+
+echo "===== PORT ====="
+grep -n "port@\|lan" "$RAX_DTS" || true
 
 # kenrel Vermagic
 sed -ie 's/^\(.\).*vermagic$/\1cp $(TOPDIR)\/.vermagic $(LINUX_DIR)\/.vermagic/' include/kernel-defaults.mk
