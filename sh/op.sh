@@ -9,288 +9,221 @@ function git_sparse_clone() {
   cd .. && rm -rf $repodir
 }
 
-#!/bin/bash
-
 set -e
 
-echo "==== Add Aigo AGS21 DTS ===="
+echo "==== Convert CMCC XR30 eMMC to Aigo AGS21 ===="
+
 
 DTS_DIR="target/linux/mediatek/dts"
 
-AGS_DTS="mt7981b-aigo-ags21-emmc.dts"
+EMMC_DTS="${DTS_DIR}/mt7981b-cmcc-xr30-emmc.dts"
+DTSI="${DTS_DIR}/mt7981b-cmcc-xr30.dtsi"
 
 
-echo "==== Create AGS21 DTS ===="
-
-
-cat > ${DTS_DIR}/${AGS_DTS} <<'EOF'
-// SPDX-License-Identifier: GPL-2.0-or-later OR MIT
-
-/dts-v1/;
-
-#include <dt-bindings/gpio/gpio.h>
-#include <dt-bindings/input/input.h>
-#include <dt-bindings/leds/common.h>
-
-#include "mt7981.dtsi"
-
-/ {
-	model = "Aigo AGS21";
-	compatible = "aigo,ags21", "mediatek,mt7981";
-
-
-	chosen {
-		bootargs = "root=PARTLABEL=rootfs rootwait rootfstype=squashfs,f2fs";
-		stdout-path = "serial0:115200n8";
-	};
-
-
-	aliases {
-		led-boot = &status_red_led;
-		led-failsafe = &status_red_led;
-		led-running = &status_blue_led;
-		led-upgrade = &status_blue_led;
-
-		serial0 = &uart0;
-	};
-
-
-	memory {
-		reg = <0 0x40000000 0 0x40000000>;
-	};
-
-
-	leds {
-		compatible = "gpio-leds";
-
-
-		status_red_led: led-0 {
-			label = "red:status";
-			gpios = <&pio 6 GPIO_ACTIVE_LOW>;
-		};
-
-
-		status_blue_led: led-1 {
-			label = "blue:status";
-			gpios = <&pio 4 GPIO_ACTIVE_LOW>;
-		};
-
-
-		internet_led: led-2 {
-			label = "green:status";
-			gpios = <&pio 29 GPIO_ACTIVE_LOW>;
-		};
-
-
-		wifi_led: led-3 {
-			label = "white:status";
-			gpios = <&pio 30 GPIO_ACTIVE_LOW>;
-		};
-
-	};
-
-
-	gpio-keys {
-
-		compatible = "gpio-keys";
-
-
-		reset {
-			label = "reset";
-			linux,code = <KEY_RESTART>;
-			gpios = <&pio 1 GPIO_ACTIVE_LOW>;
-		};
-
-
-		mesh {
-			label = "mesh";
-			linux,code = <BTN_9>;
-			gpios = <&pio 0 GPIO_ACTIVE_LOW>;
-		};
-
-	};
-
-};
-
-
-
-&uart0 {
-	status = "okay";
-};
-
-
-
-&watchdog {
-	status = "okay";
-};
-
-
-
-&mmc0 {
-
-	bus-width = <8>;
-
-	cap-mmc-highspeed;
-
-	max-frequency = <52000000>;
-
-	non-removable;
-
-	status = "okay";
-
-};
-
-
-
-&eth {
-
-	status = "okay";
-
-
-	gmac0: mac@0 {
-
-		compatible = "mediatek,eth-mac";
-		reg = <0>;
-
-		phy-mode = "2500base-x";
-
-
-		fixed-link {
-
-			speed = <2500>;
-			full-duplex;
-			pause;
-
-		};
-
-	};
-
-
-	gmac1: mac@1 {
-
-		compatible = "mediatek,eth-mac";
-		reg = <1>;
-
-		phy-mode = "gmii";
-
-	};
-
-};
-
-
-
-&mdio_bus {
-
-	switch: switch@1f {
-
-		compatible = "mediatek,mt7531";
-
-		reg = <31>;
-
-		reset-gpios = <&pio 39 GPIO_ACTIVE_HIGH>;
-
-	};
-
-};
-
-
-
-&switch {
-
-	ports {
-
-		#address-cells = <1>;
-		#size-cells = <0>;
-
-
-		port@1 {
-
-			reg = <1>;
-
-			label = "lan1";
-
-		};
-
-
-		port@2 {
-
-			reg = <2>;
-
-			label = "lan2";
-
-		};
-
-
-		port@6 {
-
-			reg = <6>;
-
-			ethernet = <&gmac0>;
-
-			phy-mode = "2500base-x";
-
-
-			fixed-link {
-
-				speed = <2500>;
-
-				full-duplex;
-
-				pause;
-
-			};
-
-		};
-
-	};
-
-};
-
-EOF
-
-
-echo "AGS21 DTS created"
-
-
-echo "==== Check DTS ===="
-
-grep -n "model" ${DTS_DIR}/${AGS_DTS}
-
-grep -n "status_blue" ${DTS_DIR}/${AGS_DTS}
-
-grep -n "lan" ${DTS_DIR}/${AGS_DTS}
-
-
-echo "==== Patch filogic.mk ===="
-
-
-FILOGIC="target/linux/mediatek/image/filogic.mk"
-
-
-if ! grep -q "Device/aigo_ags21" ${FILOGIC}; then
-
-
-cat >> ${FILOGIC} <<'EOF'
-
-
-define Device/aigo_ags21
-  DEVICE_VENDOR := Aigo
-  DEVICE_MODEL := AGS21
-  DEVICE_DTS := mt7981b-aigo-ags21-emmc
-  DEVICE_DTS_DIR := ../dts
-  DEVICE_PACKAGES := kmod-mt7981-firmware
-endef
-
-TARGET_DEVICES += aigo_ags21
-
-EOF
-
-
+if [ ! -f "$EMMC_DTS" ]; then
+	echo "ERROR: $EMMC_DTS not found"
+	exit 1
 fi
 
 
+if [ ! -f "$DTSI" ]; then
+	echo "ERROR: $DTSI not found"
+	exit 1
+fi
 
-echo "==== AGS21 DONE ===="
+
+echo "Found:"
+echo "$EMMC_DTS"
+echo "$DTSI"
+
+
+
+#################################################
+# 修改 eMMC DTS
+#################################################
+
+echo "==== Patch eMMC DTS ===="
+
+
+sed -i \
+'s/model = "CMCC XR30 (eMMC version)";/model = "Aigo AGS21";/' \
+"$EMMC_DTS"
+
+
+sed -i \
+'s/compatible = "cmcc,xr30-emmc", "mediatek,mt7981";/compatible = "aigo,ags21", "mediatek,mt7981";/' \
+"$EMMC_DTS"
+
+
+
+#################################################
+# 修改 XR30 dtsi
+#################################################
+
+echo "==== Patch XR30 dtsi ===="
+
+
+python3 - "$DTSI" <<'EOF'
+
+import sys
+import re
+
+
+file=sys.argv[1]
+
+data=open(file).read()
+
+
+
+# aliases
+
+data=re.sub(
+r'aliases\s*{.*?};',
+'''
+aliases {
+	led-boot = &status_red_led;
+	led-failsafe = &status_red_led;
+	led-running = &status_blue_led;
+	led-upgrade = &status_blue_led;
+	serial0 = &uart0;
+};
+''',
+data,
+flags=re.S
+)
+
+
+
+# LED
+
+data=re.sub(
+r'leds\s*{.*?};',
+'''
+leds {
+	compatible = "gpio-leds";
+
+	status_red_led: red {
+		label = "red:status";
+		gpios = <&pio 6 GPIO_ACTIVE_LOW>;
+	};
+
+	status_blue_led: blue {
+		label = "blue:status";
+		gpios = <&pio 4 GPIO_ACTIVE_LOW>;
+	};
+
+	internet_led: green {
+		label = "green:status";
+		gpios = <&pio 29 GPIO_ACTIVE_LOW>;
+	};
+
+	wifi_led: white {
+		label = "white:status";
+		gpios = <&pio 30 GPIO_ACTIVE_LOW>;
+	};
+};
+''',
+data,
+flags=re.S
+)
+
+
+
+# 删除 LAN3
+
+data=re.sub(
+r'\s*port@0\s*{.*?\n\s*};',
+'',
+data,
+flags=re.S
+)
+
+
+
+# 修正 LAN 名称
+
+old1='''
+port@1 {
+		reg = <1>;
+		label = "lan2";
+};'''
+
+new1='''
+port@1 {
+		reg = <1>;
+		label = "lan1";
+};'''
+
+
+data=data.replace(old1,new1)
+
+
+
+old2='''
+port@2 {
+		reg = <2>;
+		label = "lan1";
+};'''
+
+new2='''
+port@2 {
+		reg = <2>;
+		label = "lan2";
+};'''
+
+
+data=data.replace(old2,new2)
+
+
+
+open(file,"w").write(data)
+
+
+print("XR30 dtsi patched")
+
+EOF
+
+
+
+#################################################
+# 检查
+#################################################
+
+echo "===== MODEL ====="
+
+grep -n "model =" "$EMMC_DTS"
+
+
+echo "===== COMPATIBLE ====="
+
+grep -n "compatible =" "$EMMC_DTS"
+
+
+echo "===== LED ====="
+
+grep -A30 "leds {" "$DTSI"
+
+
+
+echo "===== PORT ====="
+
+grep -A40 "ports {" "$DTSI"
+
+
+
+echo "===== LAN3 CHECK ====="
+
+grep -n "lan3" "$DTSI" || echo "LAN3 removed"
+
+
+
+echo "==== AGS21 DTS DONE ===="
+
+
+
+#################################################
+# 下面继续放你原来的 feeds、daed、mosdns 等
+#################################################
 
 # kenrel Vermagic
 sed -ie 's/^\(.\).*vermagic$/\1cp $(TOPDIR)\/.vermagic $(LINUX_DIR)\/.vermagic/' include/kernel-defaults.mk
