@@ -267,6 +267,19 @@ git clone https://github.com/sbwml/luci-app-mosdns -b v5 package/mosdns
 rm -rf package/v2ray-geodata
 git clone https://github.com/sbwml/v2ray-geodata package/v2ray-geodata
 
+# Aurora Theme
+rm -rf package/luci-theme-aurora
+git clone --depth=1 \
+https://github.com/eamonxg/luci-theme-aurora \
+package/luci-theme-aurora
+
+# Aurora Config App
+rm -rf package/luci-app-aurora-config
+git clone --depth=1 \
+-b v1.2.0 \
+https://github.com/eamonxg/luci-app-aurora-config \
+package/luci-app-aurora-config
+
 # fstools
 rm -rf package/system/fstools
 git clone https://github.com/sbwml/package_system_fstools -b openwrt-25.12 package/system/fstools
