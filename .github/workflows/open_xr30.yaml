@@ -11,7 +11,7 @@ on:
       OP_author:
         description: 'Build author'
         required: false
-        default: 'kubulama'
+        default: 'masaaki'
         type: string
       CUSTOM_PLUGINS:
         description: 'Extra package names separated by spaces'
