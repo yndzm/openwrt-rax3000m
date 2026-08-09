@@ -284,7 +284,7 @@ ports {
 
 
 dts=re.sub(
-r'&switch\s*\{.*?\n\};',
+r'&switch\s*\{.*?\n\}\s*;'
 ports,
 dts,
 flags=re.S
