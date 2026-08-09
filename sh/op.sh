@@ -99,7 +99,7 @@ leds {
 
 
 dts=re.sub(
-    r'leds\s*\{.*?\n\};',
+    r'leds\s*\{.*?\n\}\s*;'
     led,
     dts,
     flags=re.S
