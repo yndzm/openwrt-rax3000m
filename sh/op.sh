@@ -36,27 +36,31 @@ echo "$EMMC_DTS"
 echo "$XR30_DTSI"
 
 
-#################################
-# 修改 eMMC dts
-#################################
+################################
+# eMMC DTS
+################################
 
 echo "==== Patch eMMC DTS ===="
 
+
+# 只修改根节点 model
 
 sed -i \
 's/model = ".*";/model = "Aigo AGS21";/' \
 "$EMMC_DTS"
 
 
+# 只修改 xr30 compatible
+
 sed -i \
-'s#compatible = ".*";#compatible = "aigo,ags21", "mediatek,mt7981";#' \
+'s/compatible = "cmcc,xr30-emmc".*/compatible = "aigo,ags21", "mediatek,mt7981";/' \
 "$EMMC_DTS"
 
 
 
-#################################
-# 修改 XR30 dtsi
-#################################
+################################
+# XR30 dtsi
+################################
 
 echo "==== Patch XR30 dtsi ===="
 
@@ -75,9 +79,9 @@ with open(file) as f:
 
 
 
-#################################
+###############################
 # aliases
-#################################
+###############################
 
 d=re.sub(
 r'aliases\s*{.*?};',
@@ -94,9 +98,9 @@ flags=re.S
 
 
 
-#################################
+###############################
 # LED
-#################################
+###############################
 
 d=re.sub(
 r'leds\s*{.*?};\n};',
@@ -129,9 +133,9 @@ flags=re.S
 
 
 
-#################################
+###############################
 # 删除 LAN3
-#################################
+###############################
 
 d=re.sub(
 r'\s*port@0\s*{.*?};',
@@ -142,27 +146,21 @@ flags=re.S
 
 
 
-#################################
-# LAN编号修正
-#################################
+###############################
+# 修正 LAN
+###############################
 
-d=d.replace(
-'''port@1 {
-		reg = <1>;
-		label = "lan2";''',
-'''port@1 {
-		reg = <1>;
-		label = "lan1";'''
+d=re.sub(
+r'(port@1\s*{\s*reg\s*=\s*<1>;\s*label\s*=\s*)"lan2"',
+r'\1"lan1"',
+d
 )
 
 
-d=d.replace(
-'''port@2 {
-		reg = <2>;
-		label = "lan1";''',
-'''port@2 {
-		reg = <2>;
-		label = "lan2";'''
+d=re.sub(
+r'(port@2\s*{\s*reg\s*=\s*<2>;\s*label\s*=\s*)"lan1"',
+r'\1"lan2"',
+d
 )
 
 
@@ -177,37 +175,36 @@ EOF
 
 
 
-#################################
+################################
 # 检查
-#################################
+################################
 
 echo "===== MODEL ====="
 grep -n "model =" "$EMMC_DTS"
 
 
 echo "===== COMPATIBLE ====="
-grep -n compatible "$EMMC_DTS"
+grep -n "compatible =" "$EMMC_DTS"
 
 
-echo "===== LED CHECK ====="
-grep -nE "GPIO|gpio|led" "$XR30_DTSI"
+echo "===== LED ====="
+grep -nE "status_red|status_blue|internet_led|wifi_led|GPIO|gpio" "$XR30_DTSI"
 
 
-echo "===== PORT CHECK ====="
-grep -A40 "ports {" "$XR30_DTSI"
+echo "===== PORT ====="
+grep -A35 "ports {" "$XR30_DTSI"
 
 
 echo "===== LAN3 CHECK ====="
 
 if grep -q 'lan3' "$XR30_DTSI"; then
-	echo "ERROR: LAN3 still exists"
+	echo "ERROR: LAN3 exists"
 else
 	echo "LAN3 removed"
 fi
 
 
 echo "==== AGS21 DTS DONE ===="
-
 
 
 #################################################
