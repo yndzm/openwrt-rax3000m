@@ -135,7 +135,12 @@ grep -nE "port@|lan" "$RAX_DTS"
 
 echo "===== DTS CHECK ====="
 
-dtc -I dts -O dtb "$RAX_DTS" >/dev/null && echo "DTS syntax OK"
+if command -v dtc >/dev/null 2>&1; then
+    dtc -I dts -O dtb "$RAX_DTS" >/dev/null
+    echo "DTS syntax OK"
+else
+    echo "dtc not installed, skip DTS check"
+fi
 
 echo "==== DONE ===="
 
