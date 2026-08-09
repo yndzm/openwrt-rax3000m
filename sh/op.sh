@@ -31,7 +31,9 @@ echo "==== Change model ===="
 sed -i 's/model = ".*";/model = "Aigo AGS21";/' "$RAX_DTS"
 
 
-echo "==== Patch LED ===="
+
+echo "==== Patch LED + ALIASES ===="
+
 
 python3 - "$RAX_DTS" <<'EOF'
 import sys
@@ -39,12 +41,13 @@ import re
 
 file=sys.argv[1]
 
+
 with open(file,'r') as f:
     dts=f.read()
 
 
 # =========================
-# aliases 修改
+# aliases
 # =========================
 
 dts=dts.replace(
@@ -68,38 +71,43 @@ dts=dts.replace(
 )
 
 
+
 # =========================
-# 替换 gpio-leds 节点
+# gpio leds
 # =========================
+
 
 pattern=r'gpio-leds\s*\{.*?\n\t\};'
 
-new_led=r'''gpio-leds {
-		compatible = "gpio-leds";
 
-		status_red_led: led-0 {
-			label = "red:status";
-			gpios = <&pio 6 GPIO_ACTIVE_LOW>;
-		};
+new_led=r'''
+gpio-leds {
+	compatible = "gpio-leds";
 
-		status_blue_led: led-1 {
-			label = "blue:status";
-			gpios = <&pio 4 GPIO_ACTIVE_LOW>;
-		};
+	status_red_led: led-0 {
+		label = "red:status";
+		gpios = <&pio 6 GPIO_ACTIVE_LOW>;
+	};
 
-		internet_led: led-2 {
-			label = "green:status";
-			gpios = <&pio 29 GPIO_ACTIVE_LOW>;
-		};
+	status_blue_led: led-1 {
+		label = "blue:status";
+		gpios = <&pio 4 GPIO_ACTIVE_LOW>;
+	};
 
-		wifi_led: led-3 {
-			label = "white:status";
-			gpios = <&pio 30 GPIO_ACTIVE_LOW>;
-		};
-	};'''
+	internet_led: led-2 {
+		label = "green:status";
+		gpios = <&pio 29 GPIO_ACTIVE_LOW>;
+	};
+
+	wifi_led: led-3 {
+		label = "white:status";
+		gpios = <&pio 30 GPIO_ACTIVE_LOW>;
+	};
+};
+'''
 
 
-dts,new_count=re.subn(
+dts,count=re.subn(
     pattern,
     new_led,
     dts,
@@ -107,16 +115,81 @@ dts,new_count=re.subn(
 )
 
 
-if new_count==0:
-    print("WARNING: gpio-leds not replaced")
-else:
+if count:
     print("LED replaced successfully")
+else:
+    print("WARNING: LED node not replaced")
+
 
 
 with open(file,'w') as f:
     f.write(dts)
 
 EOF
+
+
+
+echo "==== Patch PORT ===="
+
+
+python3 - "$RAX_DTS" <<'EOF'
+import sys
+import re
+
+
+file=sys.argv[1]
+
+
+with open(file,'r') as f:
+    dts=f.read()
+
+
+
+# 删除 RAX3000M 多出来的 port@0 lan3
+
+dts=re.sub(
+    r'\n\s*port@0\s*\{.*?\n\s*\};',
+    '',
+    dts,
+    flags=re.S
+)
+
+
+
+# port@1 lan2 -> lan1
+
+dts=dts.replace(
+'''port@1 {
+		reg = <1>;
+		label = "lan2";''',
+'''port@1 {
+		reg = <1>;
+		label = "lan1";'''
+)
+
+
+
+# port@2 lan1 -> lan2
+
+dts=dts.replace(
+'''port@2 {
+		reg = <2>;
+		label = "lan1";''',
+'''port@2 {
+		reg = <2>;
+		label = "lan2";'''
+)
+
+
+
+with open(file,'w') as f:
+    f.write(dts)
+
+
+print("PORT replaced successfully")
+
+EOF
+
 
 
 echo "==== AGS21 DTS patch finished ===="
@@ -133,13 +206,20 @@ grep -nE "led|gpio" "$RAX_DTS"
 echo "===== PORT ====="
 grep -nE "port@|lan" "$RAX_DTS"
 
+
+
 echo "===== DTS CHECK ====="
 
+
 if command -v dtc >/dev/null 2>&1; then
+
     dtc -I dts -O dtb "$RAX_DTS" >/dev/null
     echo "DTS syntax OK"
+
 else
+
     echo "dtc not installed, skip DTS check"
+
 fi
 
 echo "==== DONE ===="
