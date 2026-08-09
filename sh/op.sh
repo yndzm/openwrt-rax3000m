@@ -9,191 +9,176 @@ function git_sparse_clone() {
   cd .. && rm -rf $repodir
 }
 
+#!/bin/bash
+
 set -e
 
-
-echo "==== Convert XR30 DTS to Aigo AGS21 ===="
-
+echo "==== Add Aigo AGS21 DTS ===="
 
 DTS_DIR="target/linux/mediatek/dts"
 
-
-XR30_DTS=$(find "$DTS_DIR" -name "mt7981b-cmcc-xr30-emmc.dts" | head -n1)
-
-
-if [ -z "$XR30_DTS" ]; then
-    echo "ERROR: XR30 DTS not found"
-    exit 1
-fi
+AGS_DTS="mt7981b-aigo-ags21-emmc.dts"
 
 
-echo "Found DTS:"
-echo "$XR30_DTS"
+echo "==== Create AGS21 DTS ===="
 
 
+cat > ${DTS_DIR}/${AGS_DTS} <<'EOF'
+// SPDX-License-Identifier: GPL-2.0-or-later OR MIT
 
-python3 - "$XR30_DTS" <<'EOF'
+/dts-v1/;
 
-import sys
-import re
+#include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/input/input.h>
+#include <dt-bindings/leds/common.h>
 
+#include "mt7981.dtsi"
 
-file=sys.argv[1]
-
-
-with open(file) as f:
-    dts=f.read()
-
-
-
-# ==========================
-# MODEL
-# ==========================
-
-dts=re.sub(
-    r'model\s*=\s*"[^"]+";',
-    'model = "Aigo AGS21";',
-    dts,
-    count=1
-)
+/ {
+	model = "Aigo AGS21";
+	compatible = "aigo,ags21", "mediatek,mt7981";
 
 
-dts=re.sub(
-    r'compatible\s*=\s*"[^"]+".*?;',
-    'compatible = "aigo,ags21", "mediatek,mt7981";',
-    dts,
-    count=1
-)
-
-
-
-# ==========================
-# LED
-# ==========================
-
-led = r'''
-leds {
-	compatible = "gpio-leds";
-
-	status_red_led: led-0 {
-		label = "red:status";
-		gpios = <&gpio 6 GPIO_ACTIVE_LOW>;
+	chosen {
+		bootargs = "root=PARTLABEL=rootfs rootwait rootfstype=squashfs,f2fs";
+		stdout-path = "serial0:115200n8";
 	};
 
-	status_blue_led: led-1 {
-		label = "blue:status";
-		gpios = <&gpio 4 GPIO_ACTIVE_LOW>;
+
+	aliases {
+		led-boot = &status_red_led;
+		led-failsafe = &status_red_led;
+		led-running = &status_blue_led;
+		led-upgrade = &status_blue_led;
+
+		serial0 = &uart0;
 	};
 
-	internet_led: led-2 {
-		label = "green:status";
-		gpios = <&gpio 29 GPIO_ACTIVE_LOW>;
+
+	memory {
+		reg = <0 0x40000000 0 0x40000000>;
 	};
 
-	wifi_led: led-3 {
-		label = "white:status";
-		gpios = <&gpio 30 GPIO_ACTIVE_LOW>;
+
+	leds {
+		compatible = "gpio-leds";
+
+
+		status_red_led: led-0 {
+			label = "red:status";
+			gpios = <&pio 6 GPIO_ACTIVE_LOW>;
+		};
+
+
+		status_blue_led: led-1 {
+			label = "blue:status";
+			gpios = <&pio 4 GPIO_ACTIVE_LOW>;
+		};
+
+
+		internet_led: led-2 {
+			label = "green:status";
+			gpios = <&pio 29 GPIO_ACTIVE_LOW>;
+		};
+
+
+		wifi_led: led-3 {
+			label = "white:status";
+			gpios = <&pio 30 GPIO_ACTIVE_LOW>;
+		};
+
 	};
+
+
+	gpio-keys {
+
+		compatible = "gpio-keys";
+
+
+		reset {
+			label = "reset";
+			linux,code = <KEY_RESTART>;
+			gpios = <&pio 1 GPIO_ACTIVE_LOW>;
+		};
+
+
+		mesh {
+			label = "mesh";
+			linux,code = <BTN_9>;
+			gpios = <&pio 0 GPIO_ACTIVE_LOW>;
+		};
+
+	};
+
 };
-'''
-
-
-dts=re.sub(
-    r'leds\s*\{.*?\n\}\s*;'
-    led,
-    dts,
-    flags=re.S
-)
 
 
 
-# ==========================
-# aliases
-# ==========================
-
-if "aliases {" in dts:
-
-    dts=re.sub(
-    r'aliases\s*\{.*?\};',
-    r'''
-aliases {
-	led-boot = &status_red_led;
-	led-failsafe = &status_red_led;
-	led-running = &status_blue_led;
-	led-upgrade = &status_blue_led;
-	serial0 = &uart0;
+&uart0 {
+	status = "okay";
 };
-''',
-    dts,
-    flags=re.S
-    )
 
 
 
-# ==========================
-# WATCHDOG
-# ==========================
-
-dts=re.sub(
-r'&watchdog\s*\{.*?\};',
-'''
 &watchdog {
 	status = "okay";
 };
-''',
-dts,
-flags=re.S
-)
 
 
 
-# ==========================
-# ETH
-# ==========================
+&mmc0 {
 
-eth=r'''
-&eth {
+	bus-width = <8>;
+
+	cap-mmc-highspeed;
+
+	max-frequency = <52000000>;
+
+	non-removable;
+
 	status = "okay";
 
+};
+
+
+
+&eth {
+
+	status = "okay";
+
+
 	gmac0: mac@0 {
+
 		compatible = "mediatek,eth-mac";
 		reg = <0>;
 
 		phy-mode = "2500base-x";
 
+
 		fixed-link {
+
 			speed = <2500>;
 			full-duplex;
 			pause;
+
 		};
+
 	};
 
 
 	gmac1: mac@1 {
+
 		compatible = "mediatek,eth-mac";
 		reg = <1>;
 
 		phy-mode = "gmii";
-		phy-handle = <&int_gbe_phy>;
+
 	};
+
 };
-'''
-
-
-dts=re.sub(
-r'&eth\s*\{.*?\n\}\s*;'
-eth,
-dts,
-flags=re.S
-)
 
 
 
-# ==========================
-# SWITCH
-# ==========================
-
-mdio=r'''
 &mdio_bus {
 
 	switch: switch@1f {
@@ -202,76 +187,58 @@ mdio=r'''
 
 		reg = <31>;
 
-		reset-gpios = <&gpio 39 GPIO_ACTIVE_HIGH>;
+		reset-gpios = <&pio 39 GPIO_ACTIVE_HIGH>;
 
-		interrupt-controller;
-
-		#interrupt-cells = <1>;
-
-		interrupt-parent = <&gpio>;
-
-		interrupts = <38 IRQ_TYPE_LEVEL_HIGH>;
 	};
+
 };
-'''
-
-
-dts=re.sub(
-r'&mdio_bus\s*\{.*?\n\};',
-mdio,
-dts,
-flags=re.S
-)
 
 
 
-# ==========================
-# PORT
-# ==========================
-
-ports=r'''
 &switch {
 
-ports {
+	ports {
 
-	#address-cells = <1>;
-	#size-cells = <0>;
-
-
-	port@1 {
-
-		reg = <1>;
-
-		label = "lan1";
-
-	};
+		#address-cells = <1>;
+		#size-cells = <0>;
 
 
-	port@2 {
+		port@1 {
 
-		reg = <2>;
+			reg = <1>;
 
-		label = "lan2";
+			label = "lan1";
 
-	};
-
-
-	port@6 {
-
-		reg = <6>;
-
-		ethernet = <&gmac0>;
-
-		phy-mode = "2500base-x";
+		};
 
 
-		fixed-link {
+		port@2 {
 
-			speed = <2500>;
+			reg = <2>;
 
-			full-duplex;
+			label = "lan2";
 
-			pause;
+		};
+
+
+		port@6 {
+
+			reg = <6>;
+
+			ethernet = <&gmac0>;
+
+			phy-mode = "2500base-x";
+
+
+			fixed-link {
+
+				speed = <2500>;
+
+				full-duplex;
+
+				pause;
+
+			};
 
 		};
 
@@ -279,57 +246,51 @@ ports {
 
 };
 
-};
-'''
+EOF
 
 
-dts=re.sub(
-r'&switch\s*\{.*?\n\}\s*;'
-ports,
-dts,
-flags=re.S
-)
+echo "AGS21 DTS created"
 
 
+echo "==== Check DTS ===="
 
-with open(file,"w") as f:
-    f.write(dts)
+grep -n "model" ${DTS_DIR}/${AGS_DTS}
+
+grep -n "status_blue" ${DTS_DIR}/${AGS_DTS}
+
+grep -n "lan" ${DTS_DIR}/${AGS_DTS}
 
 
-print("XR30 -> AGS21 DTS conversion finished")
+echo "==== Patch filogic.mk ===="
+
+
+FILOGIC="target/linux/mediatek/image/filogic.mk"
+
+
+if ! grep -q "Device/aigo_ags21" ${FILOGIC}; then
+
+
+cat >> ${FILOGIC} <<'EOF'
+
+
+define Device/aigo_ags21
+  DEVICE_VENDOR := Aigo
+  DEVICE_MODEL := AGS21
+  DEVICE_DTS := mt7981b-aigo-ags21-emmc
+  DEVICE_DTS_DIR := ../dts
+  DEVICE_PACKAGES := kmod-mt7981-firmware
+endef
+
+TARGET_DEVICES += aigo_ags21
 
 EOF
 
 
-
-
-echo "===== MODEL ====="
-
-grep -n "model =" "$XR30_DTS" || true
-
-
-echo "===== LED ====="
-
-grep -A20 "leds {" "$XR30_DTS" || true
-
-
-echo "===== ETH ====="
-
-grep -A30 "&eth" "$XR30_DTS" || true
-
-
-echo "===== PORT ====="
-
-grep -A40 "&switch" "$XR30_DTS" || true
-
-
-echo "===== GPIO ====="
-
-grep -n "gpio-controller" target/linux/mediatek/dts/mt7981.dtsi || true
+fi
 
 
 
-echo "==== DONE ===="
+echo "==== AGS21 DONE ===="
 
 # kenrel Vermagic
 sed -ie 's/^\(.\).*vermagic$/\1cp $(TOPDIR)\/.vermagic $(LINUX_DIR)\/.vermagic/' include/kernel-defaults.mk
