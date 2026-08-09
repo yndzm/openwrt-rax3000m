@@ -12,7 +12,7 @@ function git_sparse_clone() {
 set -e
 
 
-echo "==== Convert CMCC XR30 DTS to Aigo AGS21 ===="
+echo "==== Convert XR30 DTS to Aigo AGS21 ===="
 
 
 DTS_DIR="target/linux/mediatek/dts"
@@ -22,12 +22,12 @@ XR30_DTS=$(find "$DTS_DIR" -name "mt7981b-cmcc-xr30-emmc.dts" | head -n1)
 
 
 if [ -z "$XR30_DTS" ]; then
-    echo "XR30 DTS not found"
+    echo "ERROR: XR30 DTS not found"
     exit 1
 fi
 
 
-echo "Using:"
+echo "Found DTS:"
 echo "$XR30_DTS"
 
 
@@ -46,112 +46,136 @@ with open(file) as f:
 
 
 
-# ======================
+# ==========================
 # MODEL
-# ======================
+# ==========================
+
+dts=re.sub(
+    r'model\s*=\s*"[^"]+";',
+    'model = "Aigo AGS21";',
+    dts,
+    count=1
+)
 
 
 dts=re.sub(
-r'model = ".*?";',
-'model = "Aigo AGS21";',
-dts
+    r'compatible\s*=\s*"[^"]+".*?;',
+    'compatible = "aigo,ags21", "mediatek,mt7981";',
+    dts,
+    count=1
 )
 
 
 
-dts=re.sub(
-r'compatible = .*?;',
-'compatible = "aigo,ags21", "mediatek,mt7981";',
-dts,
-count=1
-)
-
-
-
-# ======================
+# ==========================
 # LED
-# ======================
+# ==========================
 
-
-led=r'''
+led = r'''
 leds {
 	compatible = "gpio-leds";
 
 	status_red_led: led-0 {
 		label = "red:status";
-		gpios = <&pio 6 GPIO_ACTIVE_LOW>;
+		gpios = <&gpio 6 GPIO_ACTIVE_LOW>;
 	};
 
 	status_blue_led: led-1 {
 		label = "blue:status";
-		gpios = <&pio 4 GPIO_ACTIVE_LOW>;
+		gpios = <&gpio 4 GPIO_ACTIVE_LOW>;
 	};
 
 	internet_led: led-2 {
 		label = "green:status";
-		gpios = <&pio 29 GPIO_ACTIVE_LOW>;
+		gpios = <&gpio 29 GPIO_ACTIVE_LOW>;
 	};
 
 	wifi_led: led-3 {
 		label = "white:status";
-		gpios = <&pio 30 GPIO_ACTIVE_LOW>;
+		gpios = <&gpio 30 GPIO_ACTIVE_LOW>;
 	};
 };
 '''
 
 
 dts=re.sub(
-r'leds\s*\{.*?\n\};',
-led,
+    r'leds\s*\{.*?\n\};',
+    led,
+    dts,
+    flags=re.S
+)
+
+
+
+# ==========================
+# aliases
+# ==========================
+
+if "aliases {" in dts:
+
+    dts=re.sub(
+    r'aliases\s*\{.*?\};',
+    r'''
+aliases {
+	led-boot = &status_red_led;
+	led-failsafe = &status_red_led;
+	led-running = &status_blue_led;
+	led-upgrade = &status_blue_led;
+	serial0 = &uart0;
+};
+''',
+    dts,
+    flags=re.S
+    )
+
+
+
+# ==========================
+# WATCHDOG
+# ==========================
+
+dts=re.sub(
+r'&watchdog\s*\{.*?\};',
+'''
+&watchdog {
+	status = "okay";
+};
+''',
 dts,
 flags=re.S
 )
 
 
 
-# ======================
-# WATCHDOG
-# ======================
-
-
-dts=dts.replace(
-'''&watchdog {
-status = "disabled";
-};''',
-'''&watchdog {
-status = "okay";
-};'''
-)
-
-
-
-# ======================
+# ==========================
 # ETH
-# ======================
-
+# ==========================
 
 eth=r'''
 &eth {
-status = "okay";
+	status = "okay";
 
-gmac0: mac@0 {
-	compatible = "mediatek,eth-mac";
-	reg = <0>;
-	phy-mode = "2500base-x";
+	gmac0: mac@0 {
+		compatible = "mediatek,eth-mac";
+		reg = <0>;
 
-	fixed-link {
-		speed = <2500>;
-		full-duplex;
-		pause;
+		phy-mode = "2500base-x";
+
+		fixed-link {
+			speed = <2500>;
+			full-duplex;
+			pause;
+		};
 	};
-};
 
-gmac1: mac@1 {
-	compatible = "mediatek,eth-mac";
-	reg = <1>;
-	phy-mode = "gmii";
-	phy-handle = <&int_gbe_phy>;
-};
+
+	gmac1: mac@1 {
+		compatible = "mediatek,eth-mac";
+		reg = <1>;
+
+		phy-mode = "gmii";
+		phy-handle = <&int_gbe_phy>;
+	};
 };
 '''
 
@@ -165,68 +189,96 @@ flags=re.S
 
 
 
-# ======================
-# MDIO SWITCH
-# ======================
+# ==========================
+# SWITCH
+# ==========================
 
-
-switch=r'''
+mdio=r'''
 &mdio_bus {
-switch: switch@1f {
-	compatible = "mediatek,mt7531";
-	reg = <31>;
-	reset-gpios = <&pio 39 GPIO_ACTIVE_HIGH>;
-	interrupt-controller;
-	#interrupt-cells = <1>;
-	interrupt-parent = <&pio>;
-	interrupts = <38 IRQ_TYPE_LEVEL_HIGH>;
-};
+
+	switch: switch@1f {
+
+		compatible = "mediatek,mt7531";
+
+		reg = <31>;
+
+		reset-gpios = <&gpio 39 GPIO_ACTIVE_HIGH>;
+
+		interrupt-controller;
+
+		#interrupt-cells = <1>;
+
+		interrupt-parent = <&gpio>;
+
+		interrupts = <38 IRQ_TYPE_LEVEL_HIGH>;
+	};
 };
 '''
 
 
 dts=re.sub(
 r'&mdio_bus\s*\{.*?\n\};',
-switch,
+mdio,
 dts,
 flags=re.S
 )
 
 
 
-# ======================
+# ==========================
 # PORT
-# ======================
-
+# ==========================
 
 ports=r'''
 &switch {
+
 ports {
+
 	#address-cells = <1>;
 	#size-cells = <0>;
 
+
 	port@1 {
+
 		reg = <1>;
+
 		label = "lan1";
+
 	};
+
 
 	port@2 {
+
 		reg = <2>;
+
 		label = "lan2";
+
 	};
+
 
 	port@6 {
+
 		reg = <6>;
+
 		ethernet = <&gmac0>;
+
 		phy-mode = "2500base-x";
 
+
 		fixed-link {
+
 			speed = <2500>;
+
 			full-duplex;
+
 			pause;
+
 		};
+
 	};
+
 };
+
 };
 '''
 
@@ -238,28 +290,44 @@ dts,
 flags=re.S
 )
 
-with open(file,'w') as f:
+
+
+with open(file,"w") as f:
     f.write(dts)
 
-print("AGS21 conversion finished")
+
+print("XR30 -> AGS21 DTS conversion finished")
 
 EOF
 
-echo "===== CHECK MODEL ====="
 
-grep -n "model =" "$XR30_DTS"
 
-echo "===== CHECK LED ====="
 
-grep -A20 "leds {" "$XR30_DTS"
+echo "===== MODEL ====="
 
-echo "===== CHECK ETH ====="
+grep -n "model =" "$XR30_DTS" || true
 
-grep -A25 "&eth" "$XR30_DTS"
 
-echo "===== CHECK PORT ====="
+echo "===== LED ====="
 
-grep -A30 "&switch" "$XR30_DTS"
+grep -A20 "leds {" "$XR30_DTS" || true
+
+
+echo "===== ETH ====="
+
+grep -A30 "&eth" "$XR30_DTS" || true
+
+
+echo "===== PORT ====="
+
+grep -A40 "&switch" "$XR30_DTS" || true
+
+
+echo "===== GPIO ====="
+
+grep -n "gpio-controller" target/linux/mediatek/dts/mt7981.dtsi || true
+
+
 
 echo "==== DONE ===="
 
