@@ -11,77 +11,70 @@ function git_sparse_clone() {
 
 set -e
 
-echo "==== Fix Aigo AGS21 on RAX3000M DTS ===="
+
+echo "==== Convert CMCC XR30 DTS to Aigo AGS21 ===="
+
 
 DTS_DIR="target/linux/mediatek/dts"
 
-RAX_DTS=$(find "$DTS_DIR" -name "mt7981b-cmcc-rax3000m-emmc.dts" | head -n 1)
 
-if [ -z "$RAX_DTS" ]; then
-    echo "ERROR: RAX3000M DTS not found!"
+XR30_DTS=$(find "$DTS_DIR" -name "mt7981b-cmcc-xr30-emmc.dts" | head -n1)
+
+
+if [ -z "$XR30_DTS" ]; then
+    echo "XR30 DTS not found"
     exit 1
 fi
 
-echo "Found DTS:"
-echo "$RAX_DTS"
 
-
-echo "==== Change model ===="
-
-sed -i 's/model = ".*";/model = "Aigo AGS21";/' "$RAX_DTS"
+echo "Using:"
+echo "$XR30_DTS"
 
 
 
-echo "==== Patch LED + ALIASES ===="
+python3 - "$XR30_DTS" <<'EOF'
 
-
-python3 - "$RAX_DTS" <<'EOF'
 import sys
 import re
+
 
 file=sys.argv[1]
 
 
-with open(file,'r') as f:
+with open(file) as f:
     dts=f.read()
 
 
-# =========================
-# aliases
-# =========================
 
-dts=dts.replace(
-    "led-boot = &red_led;",
-    "led-boot = &status_red_led;"
-)
+# ======================
+# MODEL
+# ======================
 
-dts=dts.replace(
-    "led-failsafe = &red_led;",
-    "led-failsafe = &status_red_led;"
-)
 
-dts=dts.replace(
-    "led-running = &green_led;",
-    "led-running = &status_blue_led;"
-)
-
-dts=dts.replace(
-    "led-upgrade = &green_led;",
-    "led-upgrade = &status_blue_led;"
+dts=re.sub(
+r'model = ".*?";',
+'model = "Aigo AGS21";',
+dts
 )
 
 
 
-# =========================
-# gpio leds
-# =========================
+dts=re.sub(
+r'compatible = .*?;',
+'compatible = "aigo,ags21", "mediatek,mt7981";',
+dts,
+count=1
+)
 
 
-pattern=r'gpio-leds\s*\{.*?\n\t\};'
+
+# ======================
+# LED
+# ======================
 
 
-new_led=r'''
-gpio-leds {
+led=r'''
+leds {
 	compatible = "gpio-leds";
 
 	status_red_led: led-0 {
@@ -107,120 +100,166 @@ gpio-leds {
 '''
 
 
-dts,count=re.subn(
-    pattern,
-    new_led,
-    dts,
-    flags=re.S
+dts=re.sub(
+r'leds\s*\{.*?\n\};',
+led,
+dts,
+flags=re.S
 )
 
 
-if count:
-    print("LED replaced successfully")
-else:
-    print("WARNING: LED node not replaced")
+
+# ======================
+# WATCHDOG
+# ======================
+
+
+dts=dts.replace(
+'''&watchdog {
+status = "disabled";
+};''',
+'''&watchdog {
+status = "okay";
+};'''
+)
 
 
 
-with open(file,'w') as f:
-    f.write(dts)
-
-EOF
-
+# ======================
+# ETH
+# ======================
 
 
-echo "==== Patch PORT ===="
+eth=r'''
+&eth {
+status = "okay";
 
+gmac0: mac@0 {
+	compatible = "mediatek,eth-mac";
+	reg = <0>;
+	phy-mode = "2500base-x";
 
-python3 - "$RAX_DTS" <<'EOF'
-import sys
-import re
+	fixed-link {
+		speed = <2500>;
+		full-duplex;
+		pause;
+	};
+};
 
+gmac1: mac@1 {
+	compatible = "mediatek,eth-mac";
+	reg = <1>;
+	phy-mode = "gmii";
+	phy-handle = <&int_gbe_phy>;
+};
+};
+'''
 
-file=sys.argv[1]
-
-
-with open(file,'r') as f:
-    dts=f.read()
-
-
-
-# 删除 RAX3000M 多出来的 port@0 lan3
 
 dts=re.sub(
-    r'\n\s*port@0\s*\{.*?\n\s*\};',
-    '',
-    dts,
-    flags=re.S
+r'&eth\s*\{.*?\n\};',
+eth,
+dts,
+flags=re.S
 )
 
 
 
-# port@1 lan2 -> lan1
+# ======================
+# MDIO SWITCH
+# ======================
 
-dts=dts.replace(
-'''port@1 {
+
+switch=r'''
+&mdio_bus {
+switch: switch@1f {
+	compatible = "mediatek,mt7531";
+	reg = <31>;
+	reset-gpios = <&pio 39 GPIO_ACTIVE_HIGH>;
+	interrupt-controller;
+	#interrupt-cells = <1>;
+	interrupt-parent = <&pio>;
+	interrupts = <38 IRQ_TYPE_LEVEL_HIGH>;
+};
+};
+'''
+
+
+dts=re.sub(
+r'&mdio_bus\s*\{.*?\n\};',
+switch,
+dts,
+flags=re.S
+)
+
+
+
+# ======================
+# PORT
+# ======================
+
+
+ports=r'''
+&switch {
+ports {
+	#address-cells = <1>;
+	#size-cells = <0>;
+
+	port@1 {
 		reg = <1>;
-		label = "lan2";''',
-'''port@1 {
-		reg = <1>;
-		label = "lan1";'''
-)
+		label = "lan1";
+	};
 
-
-
-# port@2 lan1 -> lan2
-
-dts=dts.replace(
-'''port@2 {
+	port@2 {
 		reg = <2>;
-		label = "lan1";''',
-'''port@2 {
-		reg = <2>;
-		label = "lan2";'''
+		label = "lan2";
+	};
+
+	port@6 {
+		reg = <6>;
+		ethernet = <&gmac0>;
+		phy-mode = "2500base-x";
+
+		fixed-link {
+			speed = <2500>;
+			full-duplex;
+			pause;
+		};
+	};
+};
+};
+'''
+
+
+dts=re.sub(
+r'&switch\s*\{.*?\n\};',
+ports,
+dts,
+flags=re.S
 )
-
-
 
 with open(file,'w') as f:
     f.write(dts)
 
-
-print("PORT replaced successfully")
+print("AGS21 conversion finished")
 
 EOF
 
+echo "===== CHECK MODEL ====="
 
+grep -n "model =" "$XR30_DTS"
 
-echo "==== AGS21 DTS patch finished ===="
+echo "===== CHECK LED ====="
 
+grep -A20 "leds {" "$XR30_DTS"
 
-echo "===== MODEL ====="
-grep -n "model =" "$RAX_DTS"
+echo "===== CHECK ETH ====="
 
+grep -A25 "&eth" "$XR30_DTS"
 
-echo "===== LED ====="
-grep -nE "led|gpio" "$RAX_DTS"
+echo "===== CHECK PORT ====="
 
-
-echo "===== PORT ====="
-grep -nE "port@|lan" "$RAX_DTS"
-
-
-
-echo "===== DTS CHECK ====="
-
-
-if command -v dtc >/dev/null 2>&1; then
-
-    dtc -I dts -O dtb "$RAX_DTS" >/dev/null
-    echo "DTS syntax OK"
-
-else
-
-    echo "dtc not installed, skip DTS check"
-
-fi
+grep -A30 "&switch" "$XR30_DTS"
 
 echo "==== DONE ===="
 
