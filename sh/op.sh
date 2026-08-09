@@ -133,6 +133,9 @@ grep -nE "led|gpio" "$RAX_DTS"
 echo "===== PORT ====="
 grep -nE "port@|lan" "$RAX_DTS"
 
+echo "===== DTS CHECK ====="
+
+dtc -I dts -O dtb "$RAX_DTS" >/dev/null && echo "DTS syntax OK"
 
 echo "==== DONE ===="
 
