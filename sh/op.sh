@@ -216,12 +216,281 @@ sed -i "s/%R/by $OP_author/" package/base-files/files/etc/openwrt_release
 date=$(date +"%Y-%m-%d")
 
 
-echo "                                                    " >> package/base-files/files/etc/banner
+echo "                                                      " >> package/base-files/files/etc/banner
 echo "  _______                     ________        __" >> package/base-files/files/etc/banner
 echo " |       |.-----.-----.-----.|  |  |  |.----.|  |_" >> package/base-files/files/etc/banner
-echo " |   -   ||  _  |  -__|     ||  |  |  ||   _||   _|" >> package/base-files/files/etc/banner
+echo " |   -   ||  _  |  -__|     ||  |  |  ||  _ ||   _|" >> package/base-files/files/etc/banner
 echo " |_______||   __|_____|__|__||________||__|  |____|" >> package/base-files/files/etc/banner
 echo "          |__|" >> package/base-files/files/etc/banner
 echo " -----------------------------------------------------" >> package/base-files/files/etc/banner
-echo "         %D ${date} by $OP_author                     " >> package/base-files/files/etc/banner
+echo "          %D ${date} by $OP_author                    " >> package/base-files/files/etc/banner
 echo " -----------------------------------------------------" >> package/base-files/files/etc/banner
+
+# ==============================================================================
+# Aigo AGS21 适配：确保在源码根目录下，精准覆盖 XR30 的 DTS 设备树文件
+# ==============================================================================
+cd "${TOPDIR:-$GITHUB_WORKSPACE}" 2>/dev/null || true
+
+xr30_dts_files=$(find target/linux/mediatek/ -name "*xr30*.dts*" 2>/dev/null)
+
+if [ -n "$xr30_dts_files" ]; then
+    echo "===================================================="
+    echo "发现 XR30 DTS 文件，正在覆盖为 Aigo AGS21 专属配置..."
+    echo "$xr30_dts_files"
+    echo "===================================================="
+    
+    for file in $xr30_dts_files; do
+        cat << 'EOF' > "$file"
+// SPDX-License-Identifier: GPL-2.0-or-later OR MIT
+/*
+ * Aigo AGS21 (MT7981, 1G RAM, 64G eMMC)
+ * Based on dailook's device tree (kiddin9/Kwrt)
+ */
+
+/dts-v1/;
+#include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/input/input.h>
+#include <dt-bindings/leds/common.h>
+
+#include "mt7981.dtsi"
+
+/ {
+	model = "Aigo AGS21";
+	compatible = "aigo,ags21", "mediatek,mt7981";
+
+	chosen {
+		bootargs = "root=PARTLABEL=rootfs rootwait rootfstype=squashfs,f2fs";
+		stdout-path = "serial0:115200n8";
+	};
+
+	aliases {
+		led-boot = &status_red_led;
+		led-failsafe = &status_red_led;
+		led-running = &status_blue_led;
+		led-upgrade = &status_blue_led;
+		serial0 = &uart0;
+	};
+
+	memory {
+		reg = <0 0x40000000 0 0x40000000>;
+	};
+
+	leds {
+		compatible = "gpio-leds";
+
+		status_red_led: led-0 {
+			label = "red:status";
+			gpios = <&pio 6 GPIO_ACTIVE_LOW>;
+		};
+
+		status_blue_led: led-1 {
+			label = "blue:status";
+			gpios = <&pio 4 GPIO_ACTIVE_LOW>;
+		};
+
+		internet_led: led-2 {
+			label = "green:status";
+			gpios = <&pio 29 GPIO_ACTIVE_LOW>;
+		};
+
+		wifi_led: led-3 {
+			label = "white:status";
+			gpios = <&pio 30 GPIO_ACTIVE_LOW>;
+		};
+	};
+
+	gpio-keys {
+		compatible = "gpio-keys";
+		reset {
+			label = "reset";
+			linux,code = <KEY_RESTART>;
+			gpios = <&pio 1 GPIO_ACTIVE_LOW>;
+		};
+
+		mesh {
+			label = "mesh";
+			linux,code = <BTN_9>;
+			gpios = <&pio 0 GPIO_ACTIVE_LOW>;
+		};
+	};
+};
+
+&uart0 {
+	status = "okay";
+};
+
+&watchdog {
+	status = "okay";
+};
+
+&mmc0 {
+	bus-width = <8>;
+	cap-mmc-highspeed;
+	max-frequency = <52000000>;
+	non-removable;
+	pinctrl-names = "default", "state_uhs";
+	pinctrl-0 = <&mmc0_pins_default>;
+	pinctrl-1 = <&mmc0_pins_uhs>;
+	vmmc-supply = <&reg_3p3v>;
+	status = "okay";
+
+	card@0 {
+		compatible = "mmc-card";
+		reg = <0>;
+
+		block {
+			compatible = "block-device";
+
+			partitions {
+				block-partition-factory {
+					partname = "factory";
+
+					nvmem-layout {
+						compatible = "fixed-layout";
+						#address-cells = <1>;
+						#size-cells = <1>;
+
+						eeprom_factory_0: eeprom@0 {
+							reg = <0x0 0x1000>;
+						};
+
+						macaddr_factory_4: macaddr@4 {
+							compatible = "mac-base";
+							reg = <0x4 0x6>;
+							#nvmem-cell-cells = <1>;
+						};
+
+						macaddr_factory_24: macaddr@24 {
+							compatible = "mac-base";
+							reg = <0x24 0x6>;
+							#nvmem-cell-cells = <1>;
+						};
+
+						macaddr_factory_2a: macaddr@2a {
+							compatible = "mac-base";
+							reg = <0x2a 0x6>;
+							#nvmem-cell-cells = <1>;
+						};
+
+						macaddr_factory_30: macaddr@30 {
+							compatible = "mac-base";
+							reg = <0x30 0x6>;
+							#nvmem-cell-cells = <1>;
+						};
+					};
+				};
+			};
+		};
+	};
+};
+
+&eth {
+	status = "okay";
+
+	gmac0: mac@0 {
+		compatible = "mediatek,eth-mac";
+		reg = <0>;
+		phy-mode = "2500base-x";
+
+		nvmem-cells = <&macaddr_factory_2a 0>;
+		nvmem-cell-names = "mac-address";
+
+		fixed-link {
+			speed = <2500>;
+			full-duplex;
+			pause;
+		};
+	};
+
+	gmac1: mac@1 {
+		compatible = "mediatek,eth-mac";
+		reg = <1>;
+		phy-mode = "gmii";
+		phy-handle = <&int_gbe_phy>;
+
+		nvmem-cells = <&macaddr_factory_24 0>;
+		nvmem-cell-names = "mac-address";
+	};
+};
+
+&mdio_bus {
+	switch: switch@1f {
+		compatible = "mediatek,mt7531";
+		reg = <31>;
+		reset-gpios = <&pio 39 GPIO_ACTIVE_HIGH>;
+		interrupt-controller;
+		#interrupt-cells = <1>;
+		interrupt-parent = <&pio>;
+		interrupts = <38 IRQ_TYPE_LEVEL_HIGH>;
+	};
+};
+
+&switch {
+	ports {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		port@1 {
+			reg = <1>;
+			label = "lan1";
+		};
+
+		port@2 {
+			reg = <2>;
+			label = "lan2";
+		};
+
+		port@6 {
+			reg = <6>;
+			ethernet = <&gmac0>;
+			phy-mode = "2500base-x";
+
+			fixed-link {
+				speed = <2500>;
+				full-duplex;
+				pause;
+			};
+		};
+	};
+};
+
+&pio {
+	mmc0_pins_default: mmc0-pins-default {
+		mux {
+			function = "flash";
+			groups = "emmc_45";
+		};
+	};
+
+	mmc0_pins_uhs: mmc0-pins-uhs {
+		mux {
+			function = "flash";
+			groups = "emmc_45";
+		};
+	};
+};
+
+&wifi {
+	status = "okay";
+	nvmem-cells = <&eeprom_factory_0>;
+	nvmem-cell-names = "eeprom";
+
+	band@0 {
+		reg = <0>;
+		nvmem-cells = <&macaddr_factory_4 0>;
+		nvmem-cell-names = "mac-address";
+	};
+
+	band@1 {
+		reg = <1>;
+		nvmem-cells = <&macaddr_factory_30 0>;
+		nvmem-cell-names = "mac-address";
+	};
+};
+EOF
+    done
+else
+    echo "===================================================="
+    echo "警告：未找到包含 xr30 的 DTS 文件！"
+    echo "===================================================="
+fi
