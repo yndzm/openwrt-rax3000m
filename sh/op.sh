@@ -2,7 +2,7 @@
 
 set -e
 
-echo "==== Convert CMCC XR30 eMMC DTS to Aigo AGS21 ===="
+echo "===== Convert CMCC XR30 eMMC to Aigo AGS21 ====="
 
 
 DTS_DIR="target/linux/mediatek/dts"
@@ -13,17 +13,21 @@ XR30_DTSI="$DTS_DIR/mt7981b-cmcc-xr30.dtsi"
 FILOGIC="target/linux/mediatek/image/filogic.mk"
 
 
-############################
-# check
-############################
+echo "===== Check source tree ====="
 
-for f in "$EMMC_DTS" "$XR30_DTSI" "$FILOGIC"
+
+for f in \
+"$EMMC_DTS" \
+"$XR30_DTSI" \
+"$FILOGIC"
 do
-    if [ ! -f "$f" ]; then
-        echo "Missing:"
-        echo "$f"
-        exit 1
-    fi
+
+if [ ! -f "$f" ]; then
+	echo "Missing:"
+	echo "$f"
+	exit 1
+fi
+
 done
 
 
@@ -33,19 +37,21 @@ echo "$EMMC_DTS"
 echo "Found DTSI:"
 echo "$XR30_DTSI"
 
-echo "Found filogic:"
+echo "Found image definition:"
 echo "$FILOGIC"
 
 
 
-############################
-# eMMC DTS
-############################
-
-echo "==== Patch eMMC DTS ===="
+################################################
+# Patch eMMC DTS
+################################################
 
 
-sed -i 's/model = ".*";/model = "Aigo AGS21";/' \
+echo "===== Patch eMMC DTS ====="
+
+
+sed -i \
+'s/model = ".*";/model = "Aigo AGS21";/' \
 $EMMC_DTS
 
 
@@ -54,15 +60,22 @@ sed -i \
 $EMMC_DTS
 
 
+echo "eMMC DTS patched successfully"
 
-############################
-# replace LED
-############################
 
-echo "==== Patch AGS21 LED ===="
+
+################################################
+# Patch XR30 dtsi
+################################################
+
+
+echo "===== Patch XR30 DTSI ====="
 
 
 python3 <<'EOF'
+
+import re
+
 
 p="target/linux/mediatek/dts/mt7981b-cmcc-xr30.dtsi"
 
@@ -71,27 +84,37 @@ with open(p) as f:
     d=f.read()
 
 
-start=d.find("leds {")
 
-if start!=-1:
-
-    depth=0
-    end=None
-
-    for i in range(start,len(d)):
-
-        if d[i]=="{":
-            depth+=1
-
-        elif d[i]=="}":
-            depth-=1
-
-            if depth==0:
-                end=i+1
-                break
+################################
+# aliases
+################################
 
 
-    new=r'''
+d=re.sub(
+r'aliases\s*\{.*?\};',
+'''
+aliases {
+	led-boot = &status_red_led;
+	led-failsafe = &status_red_led;
+	led-running = &status_blue_led;
+	led-upgrade = &status_blue_led;
+	serial0 = &uart0;
+};
+''',
+d,
+flags=re.S
+)
+
+
+
+################################
+# replace LED
+################################
+
+
+d=re.sub(
+r'leds\s*\{.*?\n\};',
+'''
 leds {
 	compatible = "gpio-leds";
 
@@ -114,135 +137,186 @@ leds {
 		label = "white:status";
 		gpios = <&pio 30 GPIO_ACTIVE_LOW>;
 	};
+};
+''',
+d,
+flags=re.S
+)
+
+
+
+################################
+# remove LAN3
+################################
+
+
+d=re.sub(
+r'\s*port@0\s*\{\s*reg\s*=\s*<0>;\s*label\s*=\s*"lan3";\s*\};',
+'',
+d,
+flags=re.S
+)
+
+
+
+################################
+# fix LAN order
+################################
+
+
+d=d.replace(
+'''
+port@1 {
+		reg = <1>;
+		label = "lan2";
+};''',
+'''
+port@1 {
+		reg = <1>;
+		label = "lan1";
 };'''
+)
 
 
-    d=d[:start]+new+d[end:]
+d=d.replace(
+'''
+port@2 {
+		reg = <2>;
+		label = "lan1";
+};''',
+'''
+port@2 {
+		reg = <2>;
+		label = "lan2";
+};'''
+)
+
 
 
 with open(p,"w") as f:
     f.write(d)
 
-print("AGS21 LED applied")
+
+print("XR30 DTSI patched successfully")
 
 EOF
 
 
 
-############################
-# aliases
-############################
+################################################
+# Patch filogic.mk
+################################################
+
+
+echo "===== Patch filogic.mk ====="
 
 
 python3 <<'EOF'
 
-p="target/linux/mediatek/dts/mt7981b-cmcc-xr30.dtsi"
-
-with open(p) as f:
-    d=f.read()
-
-
-d=d.replace(
-"led-boot = &red_led;",
-"led-boot = &status_red_led;"
-)
-
-d=d.replace(
-"led-failsafe = &red_led;",
-"led-failsafe = &status_red_led;"
-)
-
-d=d.replace(
-"led-running = &white_led;",
-"led-running = &status_blue_led;"
-)
-
-d=d.replace(
-"led-upgrade = &red_led;",
-"led-upgrade = &status_blue_led;"
-)
-
-
-with open(p,"w") as f:
-    f.write(d)
-
-EOF
-
-
-
-############################
-# ports
-############################
-
-
-echo "==== Check LAN ===="
-
-
-grep -A30 "ports {" $XR30_DTSI
-
-
-
-############################
-# filogic
-############################
-
-
-echo "==== Patch filogic.mk ===="
-
-
-python3 <<'EOF'
 
 p="target/linux/mediatek/image/filogic.mk"
 
+
 with open(p) as f:
     d=f.read()
 
 
+
 d=d.replace(
-"DEVICE_VENDOR := CMCC\n  DEVICE_MODEL := XR30 (eMMC version)",
-"DEVICE_VENDOR := Aigo\n  DEVICE_MODEL := AGS21"
+'''
+DEVICE_VENDOR := CMCC
+  DEVICE_MODEL := XR30 (eMMC version)
+''',
+'''
+DEVICE_VENDOR := Aigo
+  DEVICE_MODEL := AGS21
+'''
 )
+
 
 
 with open(p,"w") as f:
     f.write(d)
 
+
 EOF
 
 
 
-############################
-# verify
-############################
+################################################
+# CHECK
+################################################
 
 
-echo "===== MODEL ====="
+echo
+echo "===== DTS ====="
 
 grep -n "model =" $EMMC_DTS
-
-
-echo "===== COMPATIBLE ====="
-
 grep -n "compatible =" $EMMC_DTS
 
 
-echo "===== LED ====="
 
-grep -n "gpio" $XR30_DTSI
+echo
+echo "===== LED GPIO ====="
+
+grep -nE "status_red|status_blue|internet_led|wifi_led|gpio" \
+$XR30_DTSI
 
 
+
+echo
 echo "===== PORT ====="
 
-grep -A35 "ports {" $XR30_DTSI
-
-
-echo "==== AGS21 DTS READY ===="
+grep -A40 "ports {" \
+$XR30_DTSI
 
 
 
-############################
-# your feeds below
-############################
+echo
+echo "===== LAN3 ====="
+
+
+if grep -q 'label = "lan3"' $XR30_DTSI
+then
+
+echo "ERROR: LAN3 exists"
+exit 1
+
+else
+
+echo "OK: LAN3 removed"
+
+fi
+
+
+
+echo
+echo "===== LAN CHECK ====="
+
+
+grep 'label = "lan1"' $XR30_DTSI && echo "OK: LAN1"
+grep 'label = "lan2"' $XR30_DTSI && echo "OK: LAN2"
+
+
+echo
+echo "===== 2.5G CHECK ====="
+
+
+grep -q "2500base-x" $XR30_DTSI \
+&& echo "OK: 2.5G WAN"
+
+
+
+echo
+echo "===== FILOGIC DEVICE ====="
+
+
+grep -A15 "define Device/cmcc_xr30-emmc" \
+$FILOGIC
+
+
+echo
+echo "==== AGS21 DTS DONE ===="
 
 ###############################################################################
 # 8. OpenWrt custom feeds
