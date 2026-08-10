@@ -2,34 +2,48 @@
 
 set -e
 
-echo "===== Convert CMCC XR30 eMMC to Aigo AGS21 ====="
+echo "=================================================="
+echo " Aigo AGS21 / MT7981 / eMMC"
+echo " Based on CMCC XR30 eMMC DTS"
+echo "=================================================="
 
+
+##################################################
+# Source paths
+##################################################
 
 DTS_DIR="target/linux/mediatek/dts"
 
 EMMC_DTS="$DTS_DIR/mt7981b-cmcc-xr30-emmc.dts"
 XR30_DTSI="$DTS_DIR/mt7981b-cmcc-xr30.dtsi"
 
-FILOGIC="target/linux/mediatek/image/filogic.mk"
+FILOGIC_MK="target/linux/mediatek/image/filogic.mk"
 
 
-echo "===== Check source tree ====="
+##################################################
+# Check source tree
+##################################################
 
+echo
+echo "===== CHECK SOURCE TREE ====="
 
-for f in \
-"$EMMC_DTS" \
-"$XR30_DTSI" \
-"$FILOGIC"
-do
-
-if [ ! -f "$f" ]; then
-	echo "Missing:"
-	echo "$f"
+if [ ! -f "$EMMC_DTS" ]; then
+	echo "ERROR: eMMC DTS not found:"
+	echo "$EMMC_DTS"
 	exit 1
 fi
 
-done
+if [ ! -f "$XR30_DTSI" ]; then
+	echo "ERROR: XR30 DTSI not found:"
+	echo "$XR30_DTSI"
+	exit 1
+fi
 
+if [ ! -f "$FILOGIC_MK" ]; then
+	echo "ERROR: filogic.mk not found:"
+	echo "$FILOGIC_MK"
+	exit 1
+fi
 
 echo "Found DTS:"
 echo "$EMMC_DTS"
@@ -38,84 +52,93 @@ echo "Found DTSI:"
 echo "$XR30_DTSI"
 
 echo "Found image definition:"
-echo "$FILOGIC"
+echo "$FILOGIC_MK"
 
 
 
-################################################
+##################################################
 # Patch eMMC DTS
-################################################
+##################################################
+
+echo
+echo "===== PATCH eMMC DTS ====="
 
 
-echo "===== Patch eMMC DTS ====="
-
-
-sed -i \
-'s/model = ".*";/model = "Aigo AGS21";/' \
-$EMMC_DTS
-
-
-sed -i \
-'s/compatible = "cmcc,xr30-emmc".*/compatible = "aigo,ags21", "mediatek,mt7981";/' \
-$EMMC_DTS
-
-
-echo "eMMC DTS patched successfully"
-
-
-
-################################################
-# Patch XR30 dtsi
-################################################
-
-
-echo "===== Patch XR30 DTSI ====="
-
-
-python3 <<'EOF'
-
+python3 - "$EMMC_DTS" <<'PY'
+import sys
 import re
 
+p = sys.argv[1]
 
-p="target/linux/mediatek/dts/mt7981b-cmcc-xr30.dtsi"
+with open(p, "r", encoding="utf-8") as f:
+    d = f.read()
+
+# Model
+d = re.sub(
+    r'model\s*=\s*"[^"]*";',
+    'model = "Aigo AGS21";',
+    d,
+    count=1
+)
+
+# Compatible
+d = re.sub(
+    r'compatible\s*=\s*"cmcc,xr30-emmc"\s*,\s*"mediatek,mt7981"\s*;',
+    'compatible = "aigo,ags21", "mediatek,mt7981";',
+    d,
+    count=1
+)
+
+with open(p, "w", encoding="utf-8") as f:
+    f.write(d)
+
+print("eMMC DTS patched successfully")
+PY
 
 
-with open(p) as f:
-    d=f.read()
+
+##################################################
+# Patch XR30 DTSI
+##################################################
+
+echo
+echo "===== PATCH XR30 DTSI ====="
 
 
+python3 - "$XR30_DTSI" <<'PY'
+import sys
+import re
 
-################################
+p = sys.argv[1]
+
+with open(p, "r", encoding="utf-8") as f:
+    d = f.read()
+
+
+##################################################
 # aliases
-################################
+##################################################
 
-
-d=re.sub(
-r'aliases\s*\{.*?\};',
-'''
-aliases {
+d = re.sub(
+    r'aliases\s*\{.*?\n\s*\};',
+    '''aliases {
 	led-boot = &status_red_led;
 	led-failsafe = &status_red_led;
 	led-running = &status_blue_led;
 	led-upgrade = &status_blue_led;
 	serial0 = &uart0;
-};
-''',
-d,
-flags=re.S
+};''',
+    d,
+    count=1,
+    flags=re.S
 )
 
 
+##################################################
+# LED
+##################################################
 
-################################
-# replace LED
-################################
-
-
-d=re.sub(
-r'leds\s*\{.*?\n\};',
-'''
-leds {
+led_block = '''leds {
 	compatible = "gpio-leds";
 
 	status_red_led: red {
@@ -137,184 +160,323 @@ leds {
 		label = "white:status";
 		gpios = <&pio 30 GPIO_ACTIVE_LOW>;
 	};
-};
-''',
-d,
-flags=re.S
-)
-
-
-
-################################
-# remove LAN3
-################################
-
-
-d=re.sub(
-r'\s*port@0\s*\{\s*reg\s*=\s*<0>;\s*label\s*=\s*"lan3";\s*\};',
-'',
-d,
-flags=re.S
-)
-
-
-
-################################
-# fix LAN order
-################################
-
-
-d=d.replace(
-'''
-port@1 {
-		reg = <1>;
-		label = "lan2";
-};''',
-'''
-port@1 {
-		reg = <1>;
-		label = "lan1";
 };'''
+
+
+# 精确寻找 leds { 节点
+start = d.find("leds {")
+
+if start == -1:
+    raise SystemExit("ERROR: leds node not found")
+
+depth = 0
+end = None
+
+for i in range(start, len(d)):
+    if d[i] == "{":
+        depth += 1
+    elif d[i] == "}":
+        depth -= 1
+        if depth == 0:
+            end = i + 1
+            break
+
+if end is None:
+    raise SystemExit("ERROR: leds node parse failed")
+
+d = d[:start] + led_block + d[end:]
+
+
+##################################################
+# Remove LAN3
+##################################################
+
+lan3_pattern = r'''
+\s*port@0\s*\{
+\s*reg\s*=\s*<0>\s*;
+\s*label\s*=\s*"lan3"\s*;
+\s*\}\s*;
+'''
+
+d, removed = re.subn(
+    lan3_pattern,
+    '',
+    d,
+    count=1,
+    flags=re.S | re.X
+)
+
+if removed != 1:
+    raise SystemExit("ERROR: LAN3 port@0 not found")
+
+
+##################################################
+# LAN1 / LAN2
+##################################################
+
+# port@1 -> lan1
+d = re.sub(
+    r'(port@1\s*\{\s*reg\s*=\s*<1>\s*;\s*label\s*=\s*)"lan2"',
+    r'\1"lan1"',
+    d,
+    count=1,
+    flags=re.S
+)
+
+# port@2 -> lan2
+d = re.sub(
+    r'(port@2\s*\{\s*reg\s*=\s*<2>\s*;\s*label\s*=\s*)"lan1"',
+    r'\1"lan2"',
+    d,
+    count=1,
+    flags=re.S
 )
 
 
-d=d.replace(
-'''
-port@2 {
-		reg = <2>;
-		label = "lan1";
-};''',
-'''
-port@2 {
-		reg = <2>;
-		label = "lan2";
-};'''
-)
-
-
-
-with open(p,"w") as f:
+with open(p, "w", encoding="utf-8") as f:
     f.write(d)
-
 
 print("XR30 DTSI patched successfully")
-
-EOF
-
+PY
 
 
-################################################
+
+##################################################
 # Patch filogic.mk
-################################################
+##################################################
+
+echo
+echo "===== PATCH FILOGIC.MK ====="
 
 
-echo "===== Patch filogic.mk ====="
+python3 - "$FILOGIC_MK" <<'PY'
+import sys
+import re
+
+p = sys.argv[1]
+
+with open(p, "r", encoding="utf-8") as f:
+    d = f.read()
 
 
-python3 <<'EOF'
+# 只修改 cmcc_xr30-emmc 这个设备
+pattern = r'(define Device/cmcc_xr30-emmc\b.*?endef)'
 
+m = re.search(pattern, d, flags=re.S)
 
-p="target/linux/mediatek/image/filogic.mk"
+if not m:
+    raise SystemExit(
+        "ERROR: Device/cmcc_xr30-emmc definition not found"
+    )
 
+block = m.group(1)
 
-with open(p) as f:
-    d=f.read()
-
-
-
-d=d.replace(
-'''
-DEVICE_VENDOR := CMCC
-  DEVICE_MODEL := XR30 (eMMC version)
-''',
-'''
-DEVICE_VENDOR := Aigo
-  DEVICE_MODEL := AGS21
-'''
+# Vendor
+block = re.sub(
+    r'^\s*DEVICE_VENDOR\s*:=.*$',
+    '  DEVICE_VENDOR := Aigo',
+    block,
+    flags=re.M
 )
 
+# Model
+block = re.sub(
+    r'^\s*DEVICE_MODEL\s*:=.*$',
+    '  DEVICE_MODEL := AGS21',
+    block,
+    flags=re.M
+)
+
+# Variant
+if re.search(r'^\s*DEVICE_VARIANT\s*:=', block, flags=re.M):
+    block = re.sub(
+        r'^\s*DEVICE_VARIANT\s*:=.*$',
+        '  DEVICE_VARIANT := eMMC',
+        block,
+        flags=re.M
+    )
+else:
+    block = block.replace(
+        '  DEVICE_MODEL := AGS21',
+        '  DEVICE_MODEL := AGS21\n'
+        '  DEVICE_VARIANT := eMMC'
+    )
+
+d = d[:m.start()] + block + d[m.end():]
 
 
-with open(p,"w") as f:
+with open(p, "w", encoding="utf-8") as f:
     f.write(d)
 
+print("filogic.mk patched successfully")
+PY
 
-EOF
 
 
-
-################################################
-# CHECK
-################################################
-
+##################################################
+# Verify DTS
+##################################################
 
 echo
 echo "===== DTS ====="
 
-grep -n "model =" $EMMC_DTS
-grep -n "compatible =" $EMMC_DTS
+grep -nE 'model =|compatible = "aigo,ags21"' \
+"$EMMC_DTS"
 
 
+
+##################################################
+# Verify LED
+##################################################
 
 echo
 echo "===== LED GPIO ====="
 
-grep -nE "status_red|status_blue|internet_led|wifi_led|gpio" \
-$XR30_DTSI
+grep -nE \
+'led-boot|led-failsafe|led-running|led-upgrade|status_red_led|status_blue_led|internet_led|wifi_led|gpios' \
+"$XR30_DTSI"
 
 
+
+##################################################
+# Verify PORT
+##################################################
 
 echo
 echo "===== PORT ====="
 
-grep -A40 "ports {" \
-$XR30_DTSI
+grep -A35 'ports {' \
+"$XR30_DTSI"
 
 
+
+##################################################
+# LAN3 check
+##################################################
 
 echo
 echo "===== LAN3 ====="
 
-
-if grep -q 'label = "lan3"' $XR30_DTSI
-then
-
-echo "ERROR: LAN3 exists"
-exit 1
-
+if grep -q 'label = "lan3"' "$XR30_DTSI"; then
+	echo "ERROR: LAN3 exists"
+	exit 1
 else
-
-echo "OK: LAN3 removed"
-
+	echo "OK: LAN3 removed"
 fi
 
 
 
-echo
-echo "===== LAN CHECK ====="
-
-
-grep 'label = "lan1"' $XR30_DTSI && echo "OK: LAN1"
-grep 'label = "lan2"' $XR30_DTSI && echo "OK: LAN2"
-
+##################################################
+# LAN1 check
+##################################################
 
 echo
-echo "===== 2.5G CHECK ====="
+echo "===== LAN1 ====="
+
+if grep -A4 'port@1 {' "$XR30_DTSI" | grep -q 'label = "lan1"'; then
+	echo "OK: port@1 = LAN1"
+else
+	echo "ERROR: port@1 is not LAN1"
+	exit 1
+fi
 
 
-grep -q "2500base-x" $XR30_DTSI \
-&& echo "OK: 2.5G WAN"
+
+##################################################
+# LAN2 check
+##################################################
+
+echo
+echo "===== LAN2 ====="
+
+if grep -A4 'port@2 {' "$XR30_DTSI" | grep -q 'label = "lan2"'; then
+	echo "OK: port@2 = LAN2"
+else
+	echo "ERROR: port@2 is not LAN2"
+	exit 1
+fi
 
 
+
+##################################################
+# 2.5G check
+##################################################
+
+echo
+echo "===== 2.5G WAN ====="
+
+if grep -A12 'port@6 {' "$XR30_DTSI" | grep -q '2500base-x'; then
+	echo "OK: port@6 = 2.5G"
+else
+	echo "ERROR: 2.5G port@6 not found"
+	exit 1
+fi
+
+
+
+##################################################
+# eMMC check
+##################################################
+
+echo
+echo "===== eMMC ====="
+
+if grep -q '&mmc0' "$EMMC_DTS"; then
+	echo "OK: eMMC mmc0 exists"
+else
+	echo "ERROR: eMMC mmc0 missing"
+	exit 1
+fi
+
+
+
+##################################################
+# WiFi check
+##################################################
+
+echo
+echo "===== WIFI ====="
+
+if grep -q '&wifi' "$EMMC_DTS"; then
+	echo "OK: WiFi node exists"
+else
+	echo "ERROR: WiFi node missing"
+	exit 1
+fi
+
+
+
+##################################################
+# filogic device
+##################################################
 
 echo
 echo "===== FILOGIC DEVICE ====="
 
+grep -A16 \
+'define Device/cmcc_xr30-emmc' \
+"$FILOGIC_MK"
 
-grep -A15 "define Device/cmcc_xr30-emmc" \
-$FILOGIC
 
 
+##################################################
+# final
+##################################################
+
+echo
+echo "=================================================="
+echo " AGS21 DTS CONVERSION SUCCESS"
+echo "=================================================="
+
+echo
+echo "DTS      : Aigo AGS21"
+echo "Storage  : eMMC"
+echo "LAN1     : port@1"
+echo "LAN2     : port@2"
+echo "WAN      : port@6 / 2.5G"
+echo "LAN3     : removed"
+echo "LED      : AGS21 GPIO"
+echo "WiFi     : enabled"
 echo
 echo "==== AGS21 DTS DONE ===="
 
