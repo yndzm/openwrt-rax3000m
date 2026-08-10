@@ -33,7 +33,7 @@ git clone -b porxy --depth 1 --single-branch https://github.com/shiyu1314/openwr
 rm -rf package/porxy/daed package/porxy/luci-app-daed
 
 rm -rf feeds/luci/applications/{luci-app-dockerman,luci-app-samba4,luci-app-aria2,luci-app-diskman}
-rm -rf feeds/packages/net/{samba4,v2ray-geodata,mosdns,sing-box,aria2,ariang,adguardhome}
+rm -rf feeds/packages/net/{samba4,sing-box,aria2,ariang,adguardhome}
 
 # drop attendedsysupgrade
 sed -i '/luci-app-attendedsysupgrade/d' \
@@ -130,6 +130,22 @@ done
 RUST_VERSION=1.95.0
 RUST_HASH=62b67230754da642a264ca0cb9fc08820c54e2ed7b3baba0289876d4cdb48c08
 sed -ri "s/(PKG_VERSION:=)[^\"]*/\1$RUST_VERSION/;s/(PKG_HASH:=)[^\"]*/\1$RUST_HASH/" feeds/packages/lang/rust/Makefile
+
+# MosDNS v5
+rm -rf package/mosdns
+git clone https://github.com/sbwml/luci-app-mosdns -b v5 package/mosdns
+
+# GeoData
+rm -rf package/v2ray-geodata
+git clone https://github.com/sbwml/v2ray-geodata package/v2ray-geodata
+
+# Aurora Theme
+rm -rf package/luci-theme-aurora
+git clone --depth=1 https://github.com/eamonxg/luci-theme-aurora package/luci-theme-aurora
+
+# Aurora Config App
+rm -rf package/luci-app-aurora-config 
+git clone --depth=1 -b v1.2.0 https://github.com/eamonxg/luci-app-aurora-config package/luci-app-aurora-config
 
 # fstools
 rm -rf package/system/fstools
