@@ -81,20 +81,30 @@ jobs:
         echo "CUSTOM_PLUGINS=${{ github.event.inputs.CUSTOM_PLUGINS }}" >> $GITHUB_ENV
         echo "DEVICE_NAME=${{ matrix.device }}" >> $GITHUB_ENV
         echo "SOURCE_NAME=${{ matrix.source }}" >> $GITHUB_ENV
-        echo "REPO_URL=https://github.com/yndzm/openwrt-source" >> $GITHUB_ENV
-        echo "REPO_BRANCH=25.12" >> $GITHUB_ENV
+        echo "REPO_URL=https://github.com/shiyu1314/openwrt-source" >> $GITHUB_ENV
+        echo "REPO_BRANCH=openwrt-25.12" >> $GITHUB_ENV
 
     - name: Clone source
       working-directory: /workdir
       run: |
         df -hT $PWD
-        git clone -b $REPO_BRANCH $REPO_URL $SOURCE_NAME
+        git clone $REPO_URL $SOURCE_NAME
         ln -sf /workdir/$SOURCE_NAME $GITHUB_WORKSPACE/$SOURCE_NAME
 
-    - name: Set release version
+    - name: Checkout source tag
       run: |
         cd $SOURCE_NAME
-        echo "release_tag=$REPO_BRANCH" >> $GITHUB_ENV
+        case $REPO_BRANCH in
+          openwrt-25.12)
+            _release_tag=$(git tag --sort=taggerdate --list 'v25.*' | tail -1)
+            git checkout $_release_tag
+            ;;
+          *)
+            echo "Can't get local/upstream branch or tag"
+            exit 1
+            ;;
+        esac
+        echo "release_tag=$_release_tag" >> $GITHUB_ENV
 
     - name: Restore build cache
       id: build-cache
@@ -112,6 +122,7 @@ jobs:
         restore-keys: |
           ${{ matrix.source }}-${{ matrix.device }}-build-cache-
           ${{ matrix.source }}-ags21-emmc-build-cache-
+          ${{ matrix.source }}-xr30-emmc-build-cache-
           ${{ matrix.source }}-mt7981-multi-build-cache-
 
     - name: Validate toolchain cache
@@ -133,6 +144,9 @@ jobs:
         cd ..
         [ -e patch ] && cp -rf patch/diy/*.patch $SOURCE_NAME || true
         [ -e patch ] && cp -rf patch/luci/*.patch $SOURCE_NAME/feeds/luci || true
+        # 自动将仓库中的 AGS21 DTS 和 修改后的 filogic.mk 注入到源码中
+        [ -e patch/target/linux/mediatek/dts/mt7981b-aigo-ags21.dts ] && cp -f patch/target/linux/mediatek/dts/mt7981b-aigo-ags21.dts $SOURCE_NAME/target/linux/mediatek/dts/ || true
+        [ -e patch/target/linux/mediatek/image/filogic.mk ] && cp -f patch/target/linux/mediatek/image/filogic.mk $SOURCE_NAME/target/linux/mediatek/image/ || true
 
     - name: Run common custom script
       run: |
@@ -140,8 +154,8 @@ jobs:
         cd $SOURCE_NAME
         $GITHUB_WORKSPACE/$DIY_P1_SH
         cd ..
-        [ -e patch ] && cp -rf patch/nginx/luci.locations $SOURCE_NAME/feeds/packages/net/nginx/files-luci-support || true
-        [ -e patch ] && cp -rf patch/nginx/uci.conf.template $SOURCE_NAME/feeds/packages/net/nginx-util/files || true
+        [ -e patch/nginx/luci.locations ] && cp -rf patch/nginx/luci.locations $SOURCE_NAME/feeds/packages/net/nginx/files-luci-support || true
+        [ -e patch/nginx/uci.conf.template ] && cp -rf patch/nginx/uci.conf.template $SOURCE_NAME/feeds/packages/net/nginx-util/files || true
 
     - name: Use kenzok8 daede source packages
       run: |
@@ -150,7 +164,7 @@ jobs:
         mv daede-src/dae daede-src/daed daede-src/luci-app-daede $SOURCE_NAME/package/porxy/
         rm -rf daede-src
 
-    - name: Load AGS21 config
+    - name: Load AGS21 eMMC config
       run: |
         [ -e files ] && mv files $SOURCE_NAME/files
         rm -f $SOURCE_NAME/files/etc/uci-defaults/98-install-daed-runfiles
@@ -213,8 +227,10 @@ jobs:
     - name: Clean volatile Go module cache
       if: always()
       run: |
-        cd $SOURCE_NAME
-        rm -rf dl/go-mod-cache
+        if [ -d "/workdir/$SOURCE_NAME" ]; then
+          cd /workdir/$SOURCE_NAME
+          rm -rf dl/go-mod-cache
+        fi
 
     - name: Save build cache
       if: always()
@@ -253,12 +269,12 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        tag_name: aigo-ags21-${{ env.tag }}
+        tag_name: ${{ env.release_tag }}-${{ env.tag }}-op-ags21
         files: ${{ env.FIRMWARE }}/*
         body: |
           ==================== Firmware Info =======================
           Workflow: op-ags21
-          Device: AIGO AGS21
+          Device: AIGO AGS21 eMMC
           Branch: ${{ env.release_tag }}
           Static IP: ${{ github.event.inputs.OP_IP }}
           Extra packages: ${{ github.event.inputs.CUSTOM_PLUGINS }}
