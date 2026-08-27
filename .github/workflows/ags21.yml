@@ -82,7 +82,7 @@ jobs:
         echo "DEVICE_NAME=${{ matrix.device }}" >> $GITHUB_ENV
         echo "SOURCE_NAME=${{ matrix.source }}" >> $GITHUB_ENV
         echo "REPO_URL=https://github.com/yndzm/openwrt-source" >> $GITHUB_ENV
-        echo "REPO_BRANCH=openwrt-25.12" >> $GITHUB_ENV
+        echo "REPO_BRANCH=openwrt-main" >> $GITHUB_ENV
 
     - name: Clone source
       working-directory: /workdir
