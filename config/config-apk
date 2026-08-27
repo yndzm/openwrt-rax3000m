@@ -1,4 +1,6 @@
 CONFIG_TARGET_DEVICE_PACKAGES_mediatek_filogic_DEVICE_cmcc_rax3000m-emmc=""
+CONFIG_TARGET_DEVICE_PACKAGES_mediatek_filogic_DEVICE_aigo_ags21=""
+CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_aigo_ags21=y
 CONFIG_TARGET_MULTI_PROFILE=y
 CONFIG_TARGET_OPTIMIZATION="-O2 -pipe -mcpu=cortex-a53+crc+crypto"
 # CONFIG_DEVEL is not set
