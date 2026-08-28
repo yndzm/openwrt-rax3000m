@@ -212,7 +212,7 @@ sed -i 's|/bin/login|/bin/login -f root|g' feeds/packages/utils/ttyd/files/ttyd.
 # 注入 uci-defaults 确保开机时 100% 正确绑定 LAN/WAN 网口
 mkdir -p package/base-files/files/etc/uci-defaults
 cat << 'EOF' > package/base-files/files/etc/uci-defaults/99-ags21-network
-#!/sh
+#!/bin/sh
 uci -q delete network.@device[0].ports
 uci -q add_list network.@device[0].ports='lan1'
 uci -q add_list network.@device[0].ports='lan2'
