@@ -16,7 +16,7 @@ on:
       CUSTOM_PLUGINS:
         description: 'Extra package names separated by spaces'
         required: false
-        default: 'luci-app-mosdns luci-theme-aurora luci-app-aurora-config luci-app-ttyd luci-app-diskman'
+        default: 'luci-app-mosdns luci-app-momo luci-app-wireguard luci-app-lucky luci-theme-aurora luci-app-aurora-config luci-app-ttyd luci-app-diskman'
         type: string
 
 permissions:
