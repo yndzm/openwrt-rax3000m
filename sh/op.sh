@@ -210,7 +210,7 @@ sed -i 's|/bin/login|/bin/login -f root|g' feeds/packages/utils/ttyd/files/ttyd.
 
 # ----------------- AGS21 专属适配与终极网络兜底 -----------------
 # 注入 uci-defaults：使用 uci batch 显式初始化网络与网桥，避免节点不存在导致的失败
-TARGET_IP="${OP_IP:-192.168.6.1}"
+TARGET_IP="${OP_IP:-192.168.2.1}"
 mkdir -p package/base-files/files/etc/uci-defaults
 cat << EOF > package/base-files/files/etc/uci-defaults/99-ags21-network
 #!/bin/sh
