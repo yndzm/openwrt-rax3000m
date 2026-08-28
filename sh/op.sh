@@ -125,7 +125,6 @@ for patch in *.patch; do
     }
 done
 
-
 # rust
 RUST_VERSION=1.95.0
 RUST_HASH=62b67230754da642a264ca0cb9fc08820c54e2ed7b3baba0289876d4cdb48c08
@@ -199,8 +198,7 @@ sed -i 's#20) \* 1000#60) \* 1000#g' feeds/luci/modules/luci-base/htdocs/luci-st
 # luci-compat - remove extra line breaks from description
 sed -i '/<br \/>/d' feeds/luci/modules/luci-compat/luasrc/view/cbi/full_valuefooter.htm
 
-
-#golang 26.x
+# golang 26.x
 rm -rf feeds/packages/lang/golang
 git clone https://github.com/sbwml/packages_lang_golang -b 26.x feeds/packages/lang/golang
 
@@ -209,6 +207,36 @@ git clone https://github.com/sbwml/packages_lang_golang -b 26.x feeds/packages/l
 
 sed -i 's|/bin/login|/bin/login -f root|g' feeds/packages/utils/ttyd/files/ttyd.config
 
+# ----------------- AGS21 专属适配修补 -----------------
+# 1. 自动净化 AGS21 原 DTS（去除 bootargs-override 冲突，添加网卡别名）
+DTS_FILE="target/linux/mediatek/dts/mt7981b-aigo-ags21.dts"
+if [ -f "$DTS_FILE" ]; then
+    sed -i '/bootargs-override/d' "$DTS_FILE"
+    sed -i '/rootdisk =/d' "$DTS_FILE"
+    sed -i '/serial0 = &uart0;/a\\t\tethernet0 = &gmac0;\n\t\tethernet1 = &gmac1;\n\t\tlabel-mac-device = &gmac0;' "$DTS_FILE"
+fi
+
+# 2. 注入板级网口映射 (确保 aigo,ags21 正确绑定 LAN1/LAN2 与 WAN)
+mkdir -p package/base-files/files/etc/board.d/
+cat << 'EOF' > package/base-files/files/etc/board.d/02_network
+#!/bin/sh
+. /lib/functions/uci-defaults.sh
+
+board_config_update
+
+case "$(board_name)" in
+aigo,ags21)
+	ucidef_set_interfaces_lan_wan "lan1 lan2" "wan"
+	;;
+*)
+	;;
+esac
+
+board_config_flush
+exit 0
+EOF
+chmod +x package/base-files/files/etc/board.d/02_network
+# -----------------------------------------------------
 
 sudo rm -rf package/base-files/files/etc/banner
 
@@ -218,13 +246,12 @@ sed -i "s/%R/by $OP_author/" package/base-files/files/etc/openwrt_release
 
 date=$(date +"%Y-%m-%d")
 
-
 echo "                                                    " >> package/base-files/files/etc/banner
-echo "  _______                     ________        __" >> package/base-files/files/etc/banner
-echo " |       |.-----.-----.-----.|  |  |  |.----.|  |_" >> package/base-files/files/etc/banner
-echo " |   -   ||  _  |  -__|     ||  |  |  ||   _||   _|" >> package/base-files/files/etc/banner
-echo " |_______||   __|_____|__|__||________||__|  |____|" >> package/base-files/files/etc/banner
-echo "          |__|" >> package/base-files/files/etc/banner
+echo "  _______                     _______        __     " >> package/base-files/files/etc/banner
+echo " |       |.-----.-----.-----.|   |   |.----.|  |_   " >> package/base-files/files/etc/banner
+echo " |   -   ||  _  |  -__|     ||   |   ||   _||   _|  " >> package/base-files/files/etc/banner
+echo " |_______||   __|_____|__|__||_______||__|  |____|  " >> package/base-files/files/etc/banner
+echo "          |__|                                      " >> package/base-files/files/etc/banner
 echo " -----------------------------------------------------" >> package/base-files/files/etc/banner
 echo "         %D ${date} by $OP_author                     " >> package/base-files/files/etc/banner
 echo " -----------------------------------------------------" >> package/base-files/files/etc/banner
