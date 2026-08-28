@@ -139,6 +139,9 @@ git clone https://github.com/sbwml/luci-app-mosdns -b v5 package/mosdns
 rm -rf package/v2ray-geodata
 git clone https://github.com/sbwml/v2ray-geodata package/v2ray-geodata
 
+# 添加 Lucky 源码
+git clone https://github.com/sirpdboy/luci-app-lucky.git package/luci-app-lucky
+
 # Aurora Theme
 rm -rf package/luci-theme-aurora
 git clone --depth=1 https://github.com/eamonxg/luci-theme-aurora package/luci-theme-aurora
