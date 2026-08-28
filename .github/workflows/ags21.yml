@@ -6,7 +6,7 @@ on:
       OP_IP:
         description: 'Static IP address'
         required: false
-        default: '192.168.6.1'
+        default: '192.168.2.1'
         type: string
       OP_author:
         description: 'Build author'
