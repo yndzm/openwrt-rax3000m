@@ -208,21 +208,40 @@ git clone https://github.com/sbwml/packages_lang_golang -b 26.x feeds/packages/l
 
 sed -i 's|/bin/login|/bin/login -f root|g' feeds/packages/utils/ttyd/files/ttyd.config
 
-# ----------------- AGS21 专属适配修补 -----------------
-# 注入 uci-defaults 确保开机时 100% 正确绑定 LAN/WAN 网口
+# ----------------- AGS21 专属适配与终极网络兜底 -----------------
+# 注入 uci-defaults：使用 uci batch 显式初始化网络与网桥，避免节点不存在导致的失败
+TARGET_IP="${OP_IP:-192.168.6.1}"
 mkdir -p package/base-files/files/etc/uci-defaults
-cat << 'EOF' > package/base-files/files/etc/uci-defaults/99-ags21-network
+cat << EOF > package/base-files/files/etc/uci-defaults/99-ags21-network
 #!/bin/sh
-uci -q delete network.@device[0].ports
-uci -q add_list network.@device[0].ports='lan1'
-uci -q add_list network.@device[0].ports='lan2'
-uci -q set network.wan.device='eth1'
-uci -q set network.wan6.device='eth1'
-uci commit network
+uci -q batch << 'UCIBATCH'
+set network.lan=interface
+set network.lan.proto='static'
+set network.lan.ipaddr='${TARGET_IP}'
+set network.lan.netmask='255.255.255.0'
+set network.lan.device='br-lan'
+
+set network.device_br_lan=device
+set network.device_br_lan.name='br-lan'
+set network.device_br_lan.type='bridge'
+delete network.device_br_lan.ports
+add_list network.device_br_lan.ports='lan1'
+add_list network.device_br_lan.ports='lan2'
+
+set network.wan=interface
+set network.wan.device='eth1'
+set network.wan.proto='dhcp'
+
+set network.wan6=interface
+set network.wan6.device='eth1'
+set network.wan6.proto='dhcpv6'
+
+commit network
+UCIBATCH
 exit 0
 EOF
 chmod +x package/base-files/files/etc/uci-defaults/99-ags21-network
-# -----------------------------------------------------
+# -----------------------------------------------------------------
 
 sudo rm -rf package/base-files/files/etc/banner
 
