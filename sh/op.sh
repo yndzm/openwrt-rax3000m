@@ -141,6 +141,9 @@ git clone https://github.com/sbwml/v2ray-geodata package/v2ray-geodata
 # Lucky
 git clone https://github.com/sirpdboy/luci-app-lucky.git package/luci-app-lucky
 
+# 2. 拉取指定的 luci-app-adguardhome 源码仓库
+git clone https://github.com/stevenjoezhang/luci-app-adguardhome.git package/luci-app-adguardhome
+
 # Aurora Theme
 rm -rf package/luci-theme-aurora
 git clone --depth=1 https://github.com/eamonxg/luci-theme-aurora package/luci-theme-aurora
