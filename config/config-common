@@ -246,25 +246,41 @@ CONFIG_PACKAGE_luci-theme-aurora=y
 CONFIG_PACKAGE_luci-app-aurora-config=y
 CONFIG_PACKAGE_luci-app-ttyd=y
 CONFIG_PACKAGE_luci-app-diskman=y
-CONFIG_PACKAGE_luci-app-mosdns=y
-CONFIG_PACKAGE_mosdns=y
-CONFIG_PACKAGE_ca-bundle=y
-CONFIG_PACKAGE_curl=y
-CONFIG_PACKAGE_luci-app-lucky=y
-CONFIG_PACKAGE_lucky=y
-CONFIG_PACKAGE_luci-app-wireguard=y
-CONFIG_PACKAGE_kmod-wireguard=y
-CONFIG_PACKAGE_luci-proto-wireguard=y
-CONFIG_PACKAGE_wireguard-tools=y
+# Momo 相关
+CONFIG_PACKAGE_momo=y
 CONFIG_PACKAGE_luci-app-momo=y
 CONFIG_PACKAGE_luci-i18n-momo-zh-cn=y
+CONFIG_PACKAGE_kmod-tun=y
+CONFIG_PACKAGE_kmod-inet-diag=y
+CONFIG_PACKAGE_kmod-netlink-diag=y
+CONFIG_PACKAGE_kmod-nft-tproxy=y
+CONFIG_PACKAGE_kmod-nft-socket=y
+
+# MosDNS & GeoData
+CONFIG_PACKAGE_luci-app-mosdns=y
+CONFIG_PACKAGE_mosdns=y
+CONFIG_PACKAGE_v2ray-geodata=y
+
+# Lucky
+CONFIG_PACKAGE_luci-app-lucky=y
+CONFIG_PACKAGE_lucky=y
+
+# ADG LuCI
+CONFIG_PACKAGE_luci-app-adguardhome=y
+# CONFIG_PACKAGE_adguardhome is not set
+
+# WireGuard
+CONFIG_PACKAGE_kmod-wireguard=y
+CONFIG_PACKAGE_wireguard-tools=y
+CONFIG_PACKAGE_luci-proto-wireguard=y
+CONFIG_PACKAGE_luci-app-wireguard=y
+
+# 基础证书与解压依赖
 CONFIG_PACKAGE_curl=y
 CONFIG_PACKAGE_ca-bundle=y
 CONFIG_PACKAGE_ca-certificates=y
 CONFIG_PACKAGE_tar=y
 CONFIG_PACKAGE_unzip=y
-CONFIG_PACKAGE_luci-app-adguardhome=y
-# CONFIG_PACKAGE_adguardhome is not set
 
 ### dae
 # CONFIG_BPF_TOOLCHAIN_NONE is not set
