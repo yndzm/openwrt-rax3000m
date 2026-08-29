@@ -33,7 +33,7 @@ git clone -b porxy --depth 1 --single-branch https://github.com/shiyu1314/openwr
 rm -rf package/porxy/daed package/porxy/luci-app-daed
 
 rm -rf feeds/luci/applications/{luci-app-dockerman,luci-app-samba4,luci-app-aria2,luci-app-diskman}
-rm -rf feeds/packages/net/{samba4,sing-box,aria2,ariang,adguardhome}
+rm -rf feeds/packages/net/{samba4,v2ray-geodata,mosdns,sing-box,aria2,ariang,adguardhome}
 
 # drop attendedsysupgrade
 sed -i '/luci-app-attendedsysupgrade/d' \
@@ -125,6 +125,7 @@ for patch in *.patch; do
     }
 done
 
+
 # rust
 RUST_VERSION=1.95.0
 RUST_HASH=62b67230754da642a264ca0cb9fc08820c54e2ed7b3baba0289876d4cdb48c08
@@ -155,7 +156,6 @@ git clone --depth=1 -b v1.2.0 https://github.com/eamonxg/luci-app-aurora-config 
 # fstools
 rm -rf package/system/fstools
 git clone https://github.com/sbwml/package_system_fstools -b openwrt-25.12 package/system/fstools
-
 # util-linux
 rm -rf package/utils/util-linux
 git clone https://github.com/sbwml/package_utils_util-linux -b openwrt-25.12 package/utils/util-linux
@@ -202,7 +202,8 @@ sed -i 's#20) \* 1000#60) \* 1000#g' feeds/luci/modules/luci-base/htdocs/luci-st
 # luci-compat - remove extra line breaks from description
 sed -i '/<br \/>/d' feeds/luci/modules/luci-compat/luasrc/view/cbi/full_valuefooter.htm
 
-# golang 26.x
+
+#golang 26.x
 rm -rf feeds/packages/lang/golang
 git clone https://github.com/sbwml/packages_lang_golang -b 26.x feeds/packages/lang/golang
 
@@ -211,40 +212,6 @@ git clone https://github.com/sbwml/packages_lang_golang -b 26.x feeds/packages/l
 
 sed -i 's|/bin/login|/bin/login -f root|g' feeds/packages/utils/ttyd/files/ttyd.config
 
-# ----------------- AGS21 专属适配与终极网络兜底 -----------------
-# 注入 uci-defaults：使用 uci batch 显式初始化网络与网桥，避免节点不存在导致的失败
-TARGET_IP="${OP_IP:-192.168.2.1}"
-mkdir -p package/base-files/files/etc/uci-defaults
-cat << EOF > package/base-files/files/etc/uci-defaults/99-ags21-network
-#!/bin/sh
-uci -q batch << 'UCIBATCH'
-set network.lan=interface
-set network.lan.proto='static'
-set network.lan.ipaddr='${TARGET_IP}'
-set network.lan.netmask='255.255.255.0'
-set network.lan.device='br-lan'
-
-set network.device_br_lan=device
-set network.device_br_lan.name='br-lan'
-set network.device_br_lan.type='bridge'
-delete network.device_br_lan.ports
-add_list network.device_br_lan.ports='lan1'
-add_list network.device_br_lan.ports='lan2'
-
-set network.wan=interface
-set network.wan.device='eth1'
-set network.wan.proto='dhcp'
-
-set network.wan6=interface
-set network.wan6.device='eth1'
-set network.wan6.proto='dhcpv6'
-
-commit network
-UCIBATCH
-exit 0
-EOF
-chmod +x package/base-files/files/etc/uci-defaults/99-ags21-network
-# -----------------------------------------------------------------
 
 sudo rm -rf package/base-files/files/etc/banner
 
@@ -254,12 +221,13 @@ sed -i "s/%R/by $OP_author/" package/base-files/files/etc/openwrt_release
 
 date=$(date +"%Y-%m-%d")
 
+
 echo "                                                    " >> package/base-files/files/etc/banner
-echo "  _______                     _______        __     " >> package/base-files/files/etc/banner
-echo " |       |.-----.-----.-----.|   |   |.----.|  |_   " >> package/base-files/files/etc/banner
-echo " |   -   ||  _  |  -__|     ||   |   ||   _||   _|  " >> package/base-files/files/etc/banner
-echo " |_______||   __|_____|__|__||_______||__|  |____|  " >> package/base-files/files/etc/banner
-echo "          |__|                                      " >> package/base-files/files/etc/banner
+echo "  _______                     ________        __" >> package/base-files/files/etc/banner
+echo " |       |.-----.-----.-----.|  |  |  |.----.|  |_" >> package/base-files/files/etc/banner
+echo " |   -   ||  _  |  -__|     ||  |  |  ||   _||   _|" >> package/base-files/files/etc/banner
+echo " |_______||   __|_____|__|__||________||__|  |____|" >> package/base-files/files/etc/banner
+echo "          |__|" >> package/base-files/files/etc/banner
 echo " -----------------------------------------------------" >> package/base-files/files/etc/banner
 echo "         %D ${date} by $OP_author                     " >> package/base-files/files/etc/banner
 echo " -----------------------------------------------------" >> package/base-files/files/etc/banner
