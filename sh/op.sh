@@ -130,11 +130,9 @@ RUST_HASH=62b67230754da642a264ca0cb9fc08820c54e2ed7b3baba0289876d4cdb48c08
 sed -ri "s/(PKG_VERSION:=)[^\"]*/\1$RUST_VERSION/;s/(PKG_HASH:=)[^\"]*/\1$RUST_HASH/" feeds/packages/lang/rust/Makefile
 
 # 彻底清理所有旧版 mosdns 和 v2ray-geodata 软链接及目录（防止旧版本占用）
-find feeds/ -type d -name "mosdns" -prune -exec rm -rf {} +
-find feeds/ -type d -name "v2ray-geodata" -prune -exec rm -rf {} +
-rm -rf package/mosdns package/v2ray-geodata
+find ./ | grep Makefile | grep v2ray-geodata | xargs rm -f
+find ./ | grep Makefile | grep mosdns | xargs rm -f
 
-# MosDNS v5 + GeoData
 git clone https://github.com/sbwml/luci-app-mosdns -b v5 package/mosdns
 git clone https://github.com/sbwml/v2ray-geodata package/v2ray-geodata
 
